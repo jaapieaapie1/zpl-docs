@@ -8,7 +8,7 @@ Every request to `/render` needs an API key. You create keys in the [console](ht
 
 ## Get a key
 
-1. Sign in to the [console](https://zpl.jaapelst.nl/console) and open **Keys**.
+1. Sign in to the [console](https://zpl.jaapelst.nl/console) and open **API keys**.
 2. Create a key. Choose **Test** or **Live**, and when it expires: after 30 days, 90 days, 1 year, or never.
 3. Copy the key. It's shown once, so store it somewhere safe, such as a secret manager or an environment variable.
 
@@ -75,7 +75,7 @@ curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
 
 ## Renew, revoke and expiry
 
-Manage your keys on the **Keys** page of the console.
+Manage your keys on the **API keys** page of the console.
 
 - **Renew** issues a new token for the same key, with a new expiry. Replace the token in your application. Earlier tokens of the key keep working until they expire.
 - **Revoke** disables a key and all its tokens for good. It takes effect within about a minute.
