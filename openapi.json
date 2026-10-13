@@ -34,7 +34,7 @@
             "required": false,
             "description": "Return server-side render timings in a response header.",
             "schema": {
-              "type": "string"
+              "type": "boolean"
             }
           }
         ],
