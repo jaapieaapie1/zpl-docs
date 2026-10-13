@@ -1,0 +1,106 @@
+---
+title: "Authenticate with an API key"
+sidebarTitle: "Authentication"
+description: "Create an API key in the console, send it with every render request, and learn how live and test keys are billed."
+---
+
+Every request to `/render` needs an API key. You create keys in the [console](https://zpl.jaapelst.nl/console).
+
+## Get a key
+
+1. Sign in to the [console](https://zpl.jaapelst.nl/console) and open **Keys**.
+2. Create a key. Choose **Test** or **Live**, and when it expires: after 30 days, 90 days, 1 year, or never.
+3. Copy the key. It's shown once, so store it somewhere safe, such as a secret manager or an environment variable.
+
+Keys look like `zpl_live_…` or `zpl_test_…`.
+
+## Send the key
+
+Send the key in the `Authorization` header:
+
+```bash
+export ZPL_API_KEY="zpl_test_..."
+
+curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -H "Authorization: Bearer $ZPL_API_KEY" \
+  --data-binary @label.zpl \
+  -o label.pdf
+```
+
+If your client can't set `Authorization`, send `X-API-Key: <key>` instead.
+
+<Warning>
+  Keep keys on your server. Don't put them in browser code, mobile apps or public repositories.
+</Warning>
+
+## Live and test keys
+
+| | Test key | Live key |
+| --- | --- | --- |
+| Prefix | `zpl_test_` | `zpl_live_` |
+| Price | Free | Billed per label |
+| Output | Large **TEST** watermark on every label | Clean labels |
+| Needs a subscription | No | Yes |
+
+Use a test key while you integrate. The TEST watermark is printed three times across each label and reversed where it covers black areas, so you can't mistake a test label for a real one. Switch to a live key when you go to production.
+
+## Billing
+
+Live keys need an active subscription. Set it up on the **Billing** page of the console, where you also find the price per label.
+
+- Every page in the response is one label, including `^PQ` copies.
+- A PNG response is one label, because it's one page.
+- Failed requests are free.
+- Test keys are always free.
+
+The `X-Labels-Billed` response header tells you how many labels the request was billed for. It's `0` for a test key.
+
+```bash
+curl -sS -D - -o label.pdf -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -H "Authorization: Bearer $ZPL_API_KEY" \
+  --data-binary @label.zpl | grep -i x-labels-billed
+```
+
+### Safe retries with Idempotency-Key
+
+A request can time out after the labels were rendered. To retry without paying twice, send an `Idempotency-Key` header with a unique value of up to 255 characters, such as your order or shipment number. Retries with the same API key and `Idempotency-Key` are billed once.
+
+```bash
+curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Idempotency-Key: order-10042" \
+  --data-binary @label.zpl \
+  -o label.pdf
+```
+
+## Renew, revoke and expiry
+
+Manage your keys on the **Keys** page of the console.
+
+- **Renew** issues a new token for the same key, with a new expiry. Replace the token in your application. Earlier tokens of the key keep working until they expire.
+- **Revoke** disables a key and all its tokens for good. It takes effect within about a minute.
+- **Expiry** is set when you create a key. An expired key returns `401`. Renew it to keep going.
+
+The renderer checks keys itself, so rendering keeps working even when the console is unavailable.
+
+## Errors
+
+Errors have a plain-text body that says what went wrong and links to the console.
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| `401` | The key is missing, not valid, expired or revoked. The response has `WWW-Authenticate: Bearer realm="zpl"`. | Check that you send the full key in `Authorization: Bearer <key>`. Create or renew a key in the console. |
+| `402` | Billing for your account isn't active, so live keys are paused. | Fix your subscription on the console's **Billing** page. Test keys keep working meanwhile. |
+
+For example, a request without a key returns:
+
+```text
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer realm="zpl"
+
+An API key is required. Create one at https://zpl.jaapelst.nl/console/keys and send it as `Authorization: Bearer <key>`.
+```
+
+## Playground
+
+The [playground](https://zpl.jaapelst.nl/playground) needs no key. It renders in your browser for free, and stamps **PREVIEW** on every label and PDF.

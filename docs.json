@@ -15,6 +15,7 @@
         "pages": [
           "index",
           "quickstart",
+          "authentication",
           "multiple-labels"
         ]
       }
