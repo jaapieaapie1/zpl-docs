@@ -14,7 +14,7 @@
     "/render": {
       "post": {
         "summary": "Render ZPL labels",
-        "description": "Send ZPL and receive the rendered labels. The body is either raw ZPL, or `multipart/form-data` with one or more ZPL files. Every `^XA…^XZ` becomes a page, and `^PQ` adds copies. A PDF contains every page; a PNG is one page, chosen with `page`.",
+        "description": "Send ZPL and receive the rendered labels. The body is either raw ZPL, or `multipart/form-data` with one or more ZPL files. Every `^XA…^XZ` becomes a page, and `^PQ` adds copies. A PDF contains every page; a PNG is one page, chosen with `page`. Requires an API key. Live keys are billed per label; test keys are free and watermark every label with TEST.",
         "operationId": "render",
         "parameters": [
           {
@@ -79,6 +79,16 @@
                 "deflate"
               ]
             }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Any string up to 255 characters, for example an order number. Retries with the same API key and `Idempotency-Key` are billed once.",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
           }
         ],
         "requestBody": {
@@ -133,6 +143,12 @@
                 "schema": {
                   "type": "string"
                 }
+              },
+              "X-Labels-Billed": {
+                "description": "Labels billed for this request: every page, including `^PQ` copies, for a live key; 1 for a PNG; 0 for a test key.",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -160,6 +176,36 @@
               }
             }
           },
+          "401": {
+            "description": "The API key is missing, not valid, expired or revoked. Create or renew a key in the console.",
+            "headers": {
+              "WWW-Authenticate": {
+                "description": "Always `Bearer realm=\"zpl\"`.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "An API key is required. Create one at https://zpl.jaapelst.nl/console/keys and send it as `Authorization: Bearer <key>`."
+              }
+            }
+          },
+          "402": {
+            "description": "Billing for the account is not active, so live keys are paused. Test keys keep working.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Billing for this account is not active, so live keys are paused. Update it at https://zpl.jaapelst.nl/console/billing; test keys keep working."
+              }
+            }
+          },
           "413": {
             "description": "The body is larger than 100 MiB after decompression.",
             "content": {
@@ -180,7 +226,30 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "apiKeyHeader": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API key from the [console](https://zpl.jaapelst.nl/console/keys), sent as `Authorization: Bearer <key>`. Live keys start with `zpl_live_`, test keys with `zpl_test_`."
+      },
+      "apiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "The same API key, sent as `X-API-Key: <key>` instead of the `Authorization` header."
       }
     }
   }
