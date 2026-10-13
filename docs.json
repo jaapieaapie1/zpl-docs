@@ -18,6 +18,19 @@
           "authentication",
           "multiple-labels"
         ]
+      },
+      {
+        "group": "Console API",
+        "openapi": "console-openapi.json",
+        "pages": [
+          "usage-api",
+          "GET /api/v1/usage",
+          "GET /api/v1/usage/daily",
+          "GET /api/v1/usage/keys",
+          "GET /api/v1/usage/events",
+          "GET /api/v1/keys",
+          "GET /api/v1/billing"
+        ]
       }
     ]
   },

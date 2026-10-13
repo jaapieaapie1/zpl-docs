@@ -1,0 +1,113 @@
+---
+title: "Read your usage and billing data with the Console API"
+sidebarTitle: "Usage API"
+description: "Pull monthly totals, per-day and per-key usage, individual requests, your API keys and billing status into your own systems as JSON."
+---
+
+The Console API gives you the numbers from the **Usage** and **Billing** pages of the console as JSON. Use it to feed usage into your own reporting, to check costs per printer or warehouse, or to reconcile invoices.
+
+All endpoints are read-only and live under `https://zpl.jaapelst.nl/console/api/v1`.
+
+## Get a key
+
+The Console API uses the same API keys as the renderer. Create one at [zpl.jaapelst.nl/console/keys](https://zpl.jaapelst.nl/console/keys), or use a key you already have, and send it as a bearer token:
+
+```bash
+Authorization: Bearer zpl_live_…
+```
+
+<Note>
+  Test keys can read too, and they see the usage of the whole organisation, live labels included. A read-only integration doesn't need a live key.
+</Note>
+
+Every key reads the data of its own organisation only. Revoked keys are refused immediately. A missing, invalid, expired or revoked key returns `401` with an `error` message.
+
+## Monthly totals
+
+```bash
+curl "https://zpl.jaapelst.nl/console/api/v1/usage?month=2026-10" \
+  -H "Authorization: Bearer $ZPL_KEY"
+```
+
+```json
+{
+  "month": "2026-10",
+  "live_labels": 6170,
+  "test_labels": 500,
+  "requests": 2253,
+  "estimated_cost": { "amount": 12.34, "currency": "EUR" }
+}
+```
+
+Leave out `month` for the current month. Months are calendar months in UTC. The estimated cost is live labels times the price per label; your invoice is authoritative.
+
+For a breakdown, use `/usage/daily` for labels per day and `/usage/keys` for labels and requests per key. They take the same `month` parameter.
+
+## Page through individual requests
+
+`/usage/events` lists every billable request, newest first. Each event has its `request_id`, `key_id`, `type` (`live` or `test`), `labels`, `format` and time `at`.
+
+```bash
+curl "https://zpl.jaapelst.nl/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=500" \
+  -H "Authorization: Bearer $ZPL_KEY"
+```
+
+```json
+{
+  "from": "2026-10-01T00:00:00Z",
+  "to": "2026-10-15T00:00:00Z",
+  "events": [
+    {
+      "request_id": "7bec9189-d315-4529-96ec-8268b23f6b84",
+      "key_id": "01a13a63-d85f-74be-9202-488c7a29b991",
+      "type": "live",
+      "labels": 2,
+      "format": "pdf",
+      "at": "2026-10-13T16:10:00Z"
+    }
+  ],
+  "next_cursor": "MTc5MDgyMTU2MDAwMDAwMC5mNDNm…"
+}
+```
+
+When `next_cursor` is not `null`, there are more events. Pass it as `cursor`, with the same `from` and `to`, to get the next page:
+
+```bash
+curl "https://zpl.jaapelst.nl/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=500&cursor=MTc5MDgyMTU2MDAwMDAwMC5mNDNm…" \
+  -H "Authorization: Bearer $ZPL_KEY"
+```
+
+This loop fetches every page with `curl` and `jq`:
+
+```bash
+url="https://zpl.jaapelst.nl/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=1000"
+cursor=""
+while :; do
+  page=$(curl -sf "$url${cursor:+&cursor=$cursor}" -H "Authorization: Bearer $ZPL_KEY")
+  echo "$page" | jq -c '.events[]'
+  cursor=$(echo "$page" | jq -r '.next_cursor // empty')
+  [ -z "$cursor" ] && break
+done
+```
+
+- `limit` is 100 by default and at most 1000.
+- `from` is inclusive and `to` is exclusive. They are RFC 3339 times and may be at most 31 days apart. Without them you get the last 31 days.
+- Write offsets as `Z`, or encode `+` as `%2B` in the URL.
+- Treat the cursor as opaque. Pages stay stable while new requests come in, so you don't miss or repeat events.
+
+## Keys and billing
+
+`/keys` lists your keys with their type, expiry and status (`active`, `expired` or `revoked`). It never returns tokens.
+
+`/billing` returns your subscription status, whether live keys can be used, and the price per label:
+
+```json
+{
+  "subscription_status": "active",
+  "billing_active": true,
+  "price_per_label": 0.002,
+  "currency": "EUR"
+}
+```
+
+The **Console API** section of the navigation documents every endpoint and field, and lets you try them with your key.
