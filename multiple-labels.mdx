@@ -1,0 +1,85 @@
+---
+title: "Render many labels in one request"
+sidebarTitle: "Multiple labels"
+description: "Render several labels, ^PQ copies, or a batch of ZPL files in a single request, optionally gzip-compressed."
+---
+
+One request can render many labels. You get them back as one multi-page PDF, or as one page at a time as PNG.
+
+## Several labels in one body
+
+Every `^XA…^XZ` in the body becomes its own page, and `^PQ` adds copies. Send them as raw ZPL like a single label:
+
+```bash
+curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  --data-binary @labels.zpl \
+  -o labels.pdf
+```
+
+The `X-Page-Count` response header tells you how many pages the PDF has.
+
+## Several files as multipart
+
+To render a batch of ZPL files, upload them as `multipart/form-data`, one `file` part per file:
+
+```bash
+curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -F file=@first.zpl \
+  -F file=@second.zpl \
+  -F file=@third.zpl \
+  -o labels.pdf
+```
+
+- Every part with a filename, or named `file`, `files` or `zpl`, counts as a ZPL file. Other form fields are ignored.
+- Each file is rendered with a fresh printer state. Settings such as `^PW` and `^LH`, and stored graphics or formats, don't carry over to the next file.
+- Pages follow the upload order. The `X-File-Page-Counts` header lists the pages per file, for example `2, 1, 1`.
+- A file can contain several labels itself.
+
+<Tip>
+  In Postman, choose **Body → form-data**, add a row with key `file`, set its type to **File**, and repeat the row for every file.
+</Tip>
+
+## One page as PNG
+
+PNG output is a single page. Choose it with `page`, starting at 1 and counted across all files:
+
+```bash
+curl -X POST "https://zpl.jaapelst.nl/render?format=png&page=2" \
+  -F file=@first.zpl -F file=@second.zpl \
+  -o page-2.png
+```
+
+## Compressed uploads
+
+Labels that embed bitmaps (`~DG`, `^GF`) are large but compress well. Send the body gzip-compressed with a `Content-Encoding: gzip` header (`deflate` works too):
+
+```bash
+gzip -c labels.zpl | curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -H "Content-Encoding: gzip" \
+  --data-binary @- \
+  -o labels.pdf
+```
+
+curl can't compress a `-F` multipart body itself. To send a compressed batch of files, build the multipart body yourself and gzip it:
+
+```bash
+b=zplboundary$RANDOM
+{ for f in labels/*.zpl; do
+    printf -- '--%s\r\nContent-Disposition: form-data; name="file"; filename="%s"\r\n\r\n' "$b" "$(basename "$f")"
+    cat "$f"; printf '\r\n'
+  done; printf -- '--%s--\r\n' "$b"; } | gzip -c \
+| curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+    -H "Content-Type: multipart/form-data; boundary=$b" \
+    -H "Content-Encoding: gzip" \
+    --data-binary @- \
+    -o labels.pdf
+```
+
+## Limits
+
+| Limit | Value |
+| --- | --- |
+| Request body | 100 MiB, measured after decompression |
+| Pages per request | 1000, across all files |
+
+A larger body returns `413`, a corrupt compressed body `400`, and an unsupported `Content-Encoding` `415`. For bigger batches, split them over several requests.

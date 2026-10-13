@@ -21,3 +21,7 @@ curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
 <Tip>
   Use `--data-binary` instead of `-d` so curl keeps the newlines in your ZPL intact.
 </Tip>
+
+<Card title="Render many labels at once" icon="layer-group" href="/multiple-labels">
+  Send several labels, `^PQ` copies or a batch of ZPL files in one request, optionally gzip-compressed.
+</Card>
