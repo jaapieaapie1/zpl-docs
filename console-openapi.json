@@ -1,0 +1,681 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ZPL Console API",
+    "version": "1.0.0",
+    "description": "Read your organisation's usage, API keys and billing status as JSON. Authenticate with any of your API keys, live or test. All endpoints are read-only."
+  },
+  "servers": [
+    {
+      "url": "https://zpl.jaapelst.nl/console"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/v1/usage": {
+      "get": {
+        "summary": "Monthly usage totals",
+        "description": "Live and test labels, requests and the estimated cost of a month. The estimate is live labels times the price per label, rounded to cents; your invoice is authoritative.",
+        "operationId": "getUsage",
+        "tags": [
+          "Console API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Totals for the month.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageTotals"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "description": "The calendar month in UTC, as `YYYY-MM`. Defaults to the current month.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "example": "2026-10"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/usage/daily": {
+      "get": {
+        "summary": "Usage per day",
+        "description": "Live and test labels for every day of a month (UTC), including days without usage.",
+        "operationId": "getUsageDaily",
+        "tags": [
+          "Console API"
+        ],
+        "responses": {
+          "200": {
+            "description": "One entry per day of the month.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DailyUsage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "description": "The calendar month in UTC, as `YYYY-MM`. Defaults to the current month.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "example": "2026-10"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/usage/keys": {
+      "get": {
+        "summary": "Usage per key",
+        "description": "Labels and requests per API key in a month, most labels first. Keys without usage that month are left out.",
+        "operationId": "getUsageKeys",
+        "tags": [
+          "Console API"
+        ],
+        "responses": {
+          "200": {
+            "description": "One entry per key used that month.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyUsageList"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "parameters": [
+          {
+            "name": "month",
+            "in": "query",
+            "required": false,
+            "description": "The calendar month in UTC, as `YYYY-MM`. Defaults to the current month.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$",
+              "example": "2026-10"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/usage/events": {
+      "get": {
+        "summary": "List usage events",
+        "description": "The individual billable requests, newest first, a page at a time. Pass `next_cursor` as `cursor` to get the next page, with the same `from` and `to`; it is `null` on the last page. Pages stay stable while new requests arrive.\n\n`from` and `to` may be at most 31 days apart. Leave both out for the last 31 days; give one and the window is 31 days from or up to it.",
+        "operationId": "listUsageEvents",
+        "tags": [
+          "Console API"
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of events.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        },
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Start of the window (inclusive), RFC 3339. URL-encode a `+` offset as `%2B`, or use `Z`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-10-01T00:00:00Z"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "End of the window (exclusive), RFC 3339.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-10-15T00:00:00Z"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Events per page.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The `next_cursor` of the previous page, unchanged.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/keys": {
+      "get": {
+        "summary": "List API keys",
+        "description": "Your organisation's API keys, including revoked and expired ones. Tokens are never returned: they are shown once, when created or renewed in the console.",
+        "operationId": "listKeys",
+        "tags": [
+          "Console API"
+        ],
+        "responses": {
+          "200": {
+            "description": "The organisation's keys.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeyList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/billing": {
+      "get": {
+        "summary": "Billing status",
+        "description": "The Stripe subscription status and the price per live label.",
+        "operationId": "getBilling",
+        "tags": [
+          "Console API"
+        ],
+        "responses": {
+          "200": {
+            "description": "Billing status.",
+            "headers": {
+              "Cache-Control": {
+                "$ref": "#/components/headers/CacheControl"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Billing"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "One of your API keys (`zpl_live_…` or `zpl_test_…`), created at https://zpl.jaapelst.nl/console/keys. Revoked keys are refused immediately."
+      }
+    },
+    "headers": {
+      "CacheControl": {
+        "description": "Always `no-store`.",
+        "schema": {
+          "type": "string",
+          "example": "no-store"
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "The API key is missing, invalid, expired or revoked.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "This API key has been revoked. Send one of your API keys as `Authorization: Bearer <key>`; manage keys at https://zpl.jaapelst.nl/console/keys"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "A query parameter is not valid.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "`from` and `to` may be at most 31 days apart."
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "What went wrong."
+          }
+        }
+      },
+      "Money": {
+        "type": "object",
+        "required": [
+          "amount",
+          "currency"
+        ],
+        "properties": {
+          "amount": {
+            "type": "number",
+            "example": 12.34
+          },
+          "currency": {
+            "type": "string",
+            "const": "EUR"
+          }
+        }
+      },
+      "UsageTotals": {
+        "type": "object",
+        "required": [
+          "month",
+          "live_labels",
+          "test_labels",
+          "requests",
+          "estimated_cost"
+        ],
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-10"
+          },
+          "live_labels": {
+            "type": "integer",
+            "description": "Billed labels.",
+            "example": 6170
+          },
+          "test_labels": {
+            "type": "integer",
+            "description": "Free, watermarked labels.",
+            "example": 500
+          },
+          "requests": {
+            "type": "integer",
+            "description": "Render requests, live and test.",
+            "example": 2253
+          },
+          "estimated_cost": {
+            "$ref": "#/components/schemas/Money"
+          }
+        }
+      },
+      "DailyUsage": {
+        "type": "object",
+        "required": [
+          "month",
+          "days"
+        ],
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-10"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "date",
+                "live_labels",
+                "test_labels"
+              ],
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "example": "2026-10-01"
+                },
+                "live_labels": {
+                  "type": "integer",
+                  "example": 210
+                },
+                "test_labels": {
+                  "type": "integer",
+                  "example": 38
+                }
+              }
+            }
+          }
+        }
+      },
+      "KeyUsageList": {
+        "type": "object",
+        "required": [
+          "month",
+          "keys"
+        ],
+        "properties": {
+          "month": {
+            "type": "string",
+            "example": "2026-10"
+          },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "key_id",
+                "name",
+                "type",
+                "labels",
+                "requests",
+                "last_used"
+              ],
+              "properties": {
+                "key_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "`null` when the key no longer exists."
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "live",
+                    "test"
+                  ],
+                  "description": "`live` keys are billed; `test` keys are free and watermarked."
+                },
+                "labels": {
+                  "type": "integer"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "last_used": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "The latest request with this key in the month."
+                }
+              }
+            }
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "required": [
+          "request_id",
+          "key_id",
+          "type",
+          "labels",
+          "format",
+          "at"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Unique per request."
+          },
+          "key_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "live",
+              "test"
+            ],
+            "description": "`live` keys are billed; `test` keys are free and watermarked."
+          },
+          "labels": {
+            "type": "integer",
+            "description": "Labels (pages) rendered by the request.",
+            "example": 3
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "pdf",
+              "png"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was rendered."
+          }
+        }
+      },
+      "EventPage": {
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "events",
+          "next_cursor"
+        ],
+        "properties": {
+          "from": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the window used (inclusive)."
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time",
+            "description": "End of the window used (exclusive)."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `cursor` for the next page; `null` on the last page."
+          }
+        }
+      },
+      "Key": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type",
+          "created_at",
+          "expires_at",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Warehouse printer"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "live",
+              "test"
+            ],
+            "description": "`live` keys are billed; `test` keys are free and watermarked."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the key was created."
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Expiry of the key's latest token; `null` if it never expires."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "expired",
+              "revoked"
+            ]
+          }
+        }
+      },
+      "KeyList": {
+        "type": "object",
+        "required": [
+          "keys"
+        ],
+        "properties": {
+          "keys": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Key"
+            }
+          }
+        }
+      },
+      "Billing": {
+        "type": "object",
+        "required": [
+          "subscription_status",
+          "billing_active",
+          "price_per_label",
+          "currency"
+        ],
+        "properties": {
+          "subscription_status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The Stripe subscription status, such as `active` or `past_due`; `null` without a subscription.",
+            "example": "active"
+          },
+          "billing_active": {
+            "type": "boolean",
+            "description": "Whether live keys can be used."
+          },
+          "price_per_label": {
+            "type": "number",
+            "example": 0.002
+          },
+          "currency": {
+            "type": "string",
+            "const": "EUR"
+          }
+        }
+      }
+    }
+  }
+}
