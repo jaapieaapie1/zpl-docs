@@ -12,11 +12,12 @@ Every `^XA…^XZ` in the body becomes its own page, and `^PQ` adds copies. Send 
 
 ```bash
 curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -H "Authorization: Bearer $ZPL_API_KEY" \
   --data-binary @labels.zpl \
   -o labels.pdf
 ```
 
-The `X-Page-Count` response header tells you how many pages the PDF has.
+The `X-Page-Count` response header tells you how many pages the PDF has. With a live key, every page is billed as one label, and `X-Labels-Billed` shows the total. See [Authentication](/authentication).
 
 ## Several files as multipart
 
@@ -24,6 +25,7 @@ To render a batch of ZPL files, upload them as `multipart/form-data`, one `file`
 
 ```bash
 curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -H "Authorization: Bearer $ZPL_API_KEY" \
   -F file=@first.zpl \
   -F file=@second.zpl \
   -F file=@third.zpl \
@@ -36,7 +38,7 @@ curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
 - A file can contain several labels itself.
 
 <Tip>
-  In Postman, choose **Body → form-data**, add a row with key `file`, set its type to **File**, and repeat the row for every file.
+  In Postman, set **Authorization → Bearer Token** to your API key. Then choose **Body → form-data**, add a row with key `file`, set its type to **File**, and repeat the row for every file.
 </Tip>
 
 ## One page as PNG
@@ -45,6 +47,7 @@ PNG output is a single page. Choose it with `page`, starting at 1 and counted ac
 
 ```bash
 curl -X POST "https://zpl.jaapelst.nl/render?format=png&page=2" \
+  -H "Authorization: Bearer $ZPL_API_KEY" \
   -F file=@first.zpl -F file=@second.zpl \
   -o page-2.png
 ```
@@ -55,6 +58,7 @@ Labels that embed bitmaps (`~DG`, `^GF`) are large but compress well. Send the b
 
 ```bash
 gzip -c labels.zpl | curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -H "Authorization: Bearer $ZPL_API_KEY" \
   -H "Content-Encoding: gzip" \
   --data-binary @- \
   -o labels.pdf
@@ -69,6 +73,7 @@ b=zplboundary$RANDOM
     cat "$f"; printf '\r\n'
   done; printf -- '--%s--\r\n' "$b"; } | gzip -c \
 | curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+    -H "Authorization: Bearer $ZPL_API_KEY" \
     -H "Content-Type: multipart/form-data; boundary=$b" \
     -H "Content-Encoding: gzip" \
     --data-binary @- \

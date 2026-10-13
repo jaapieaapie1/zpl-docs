@@ -7,12 +7,23 @@ openapi: "openapi.json POST /render"
 
 The ZPL renderer exposes a single HTTP endpoint at `https://zpl.jaapelst.nl/render`. Send your ZPL as the raw request body and the response is the rendered label.
 
-Click **Try it** to render the example shipping label directly from this page. Set `format` to `png` to preview the label inline.
+## Get an API key
+
+Every request needs an API key. Create one on the **Keys** page of the [console](https://zpl.jaapelst.nl/console). Start with a test key: it's free, and stamps **TEST** on every label. Then store the key in the `ZPL_API_KEY` environment variable:
+
+```bash
+export ZPL_API_KEY="zpl_test_..."
+```
+
+See [Authentication](/authentication) for live keys, billing and errors.
+
+Click **Try it** to render the example shipping label directly from this page. Paste your key in the authorization field, and set `format` to `png` to preview the label inline.
 
 ## Example
 
 ```bash
 curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+  -H "Authorization: Bearer $ZPL_API_KEY" \
   -H "Content-Type: text/plain" \
   --data-binary @label.zpl \
   -o label.pdf
@@ -22,6 +33,13 @@ curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
   Use `--data-binary` instead of `-d` so curl keeps the newlines in your ZPL intact.
 </Tip>
 
+<Note>
+  Just trying ZPL? The [playground](https://zpl.jaapelst.nl/playground) renders in your browser without a key. It's free, but stamps **PREVIEW** on every label and PDF.
+</Note>
+
+<Card title="Authentication" icon="key" href="/authentication">
+  Live and test keys, billing per label, safe retries and error codes.
+</Card>
 <Card title="Render many labels at once" icon="layer-group" href="/multiple-labels">
   Send several labels, `^PQ` copies or a batch of ZPL files in one request, optionally gzip-compressed.
 </Card>
