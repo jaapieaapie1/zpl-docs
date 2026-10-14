@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "ZPL Console API",
+    "title": "Caretly Console API",
     "version": "1.0.0",
     "description": "Read your organisation's usage, API keys and billing status as JSON. Authenticate with any of your API keys, live or test. All endpoints are read-only."
   },

@@ -1,5 +1,5 @@
-<svg width="152" height="24" viewBox="0 0 152 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <title>ZPL Renderer</title>
+<svg width="112" height="24" viewBox="0 0 112 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>Caretly</title>
   <!-- Shipping label with a barcode -->
   <rect x="1" y="1" width="30" height="22" rx="3.5" fill="#16A34A"/>
   <rect x="5" y="4.5" width="13" height="2" rx="1" fill="#FFFFFF" fill-opacity="0.85"/>
@@ -14,5 +14,5 @@
     <rect x="26" y="12" width="1.5" height="7.5"/>
   </g>
   <rect x="21" y="4.5" width="6.5" height="5" rx="1" fill="#FFFFFF" fill-opacity="0.85"/>
-  <text x="39" y="17.6" fill="#09090B" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16.5" font-weight="700" letter-spacing="-0.2">ZPL <tspan font-weight="500" fill="#3F3F46">Renderer</tspan></text>
+  <text x="39" y="17.6" fill="#09090B" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16.5" font-weight="700" letter-spacing="-0.2">Caretly</text>
 </svg>
