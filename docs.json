@@ -38,12 +38,12 @@
         {
           "anchor": "Playground",
           "icon": "pen-to-square",
-          "href": "https://zpl.jaapelst.nl/playground"
+          "href": "https://caretly.dev/playground"
         },
         {
           "anchor": "Console",
           "icon": "key",
-          "href": "https://zpl.jaapelst.nl/console"
+          "href": "https://caretly.dev/console"
         }
       ]
     }
@@ -56,13 +56,13 @@
     "links": [
       {
         "label": "Playground",
-        "href": "https://zpl.jaapelst.nl/playground"
+        "href": "https://caretly.dev/playground"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Console",
-      "href": "https://zpl.jaapelst.nl/console"
+      "href": "https://caretly.dev/console"
     }
   },
   "contextual": {

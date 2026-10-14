@@ -4,11 +4,11 @@ sidebarTitle: "Authentication"
 description: "Create an API key in the console, send it with every render request, and learn how live and test keys are billed."
 ---
 
-Every request to `/render` needs an API key. You create keys in the [console](https://zpl.jaapelst.nl/console).
+Every request to `/render` needs an API key. You create keys in the [console](https://caretly.dev/console).
 
 ## Get a key
 
-1. Sign in to the [console](https://zpl.jaapelst.nl/console) and open **API keys**.
+1. Sign in to the [console](https://caretly.dev/console) and open **API keys**.
 2. Create a key. Choose **Test** or **Live**, and when it expires: after 30 days, 90 days, 1 year, or never.
 3. Copy the key. It's shown once, so store it somewhere safe, such as a secret manager or an environment variable.
 
@@ -21,7 +21,7 @@ Send the key in the `Authorization` header:
 ```bash
 export ZPL_API_KEY="zpl_test_..."
 
-curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+curl -X POST "https://caretly.dev/render?format=pdf" \
   -H "Authorization: Bearer $ZPL_API_KEY" \
   --data-binary @label.zpl \
   -o label.pdf
@@ -56,7 +56,7 @@ Live keys need an active subscription. Set it up on the **Billing** page of the 
 The `X-Labels-Billed` response header tells you how many labels the request was billed for. It's `0` for a test key.
 
 ```bash
-curl -sS -D - -o label.pdf -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+curl -sS -D - -o label.pdf -X POST "https://caretly.dev/render?format=pdf" \
   -H "Authorization: Bearer $ZPL_API_KEY" \
   --data-binary @label.zpl | grep -i x-labels-billed
 ```
@@ -66,7 +66,7 @@ curl -sS -D - -o label.pdf -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
 A request can time out after the labels were rendered. To retry without paying twice, send an `Idempotency-Key` header with a unique value of up to 255 characters, such as your order or shipment number. A retry with the same API key, `Idempotency-Key`, labels and query parameters is billed once. Reusing a key for different labels, or for another page or format, is billed as a new request, so use a new value for every new label. A retry is rendered again, and its `X-Labels-Billed` header shows the full count even though the invoice counts it once.
 
 ```bash
-curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+curl -X POST "https://caretly.dev/render?format=pdf" \
   -H "Authorization: Bearer $ZPL_API_KEY" \
   -H "Idempotency-Key: order-10042" \
   --data-binary @label.zpl \
@@ -98,9 +98,9 @@ For example, a request without a key returns:
 HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer realm="zpl"
 
-An API key is required. Create one at https://zpl.jaapelst.nl/console/keys and send it as `Authorization: Bearer <key>`.
+An API key is required. Create one at https://caretly.dev/console/keys and send it as `Authorization: Bearer <key>`.
 ```
 
 ## Playground
 
-The [playground](https://zpl.jaapelst.nl/playground) needs no key. It renders in your browser for free, and stamps **PREVIEW** on every label and PDF.
+The [playground](https://caretly.dev/playground) needs no key. It renders in your browser for free, and stamps **PREVIEW** on every label and PDF.

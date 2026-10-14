@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://zpl.jaapelst.nl"
+      "url": "https://caretly.dev"
     }
   ],
   "paths": {
@@ -191,7 +191,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "An API key is required. Create one at https://zpl.jaapelst.nl/console/keys and send it as `Authorization: Bearer <key>`."
+                "example": "An API key is required. Create one at https://caretly.dev/console/keys and send it as `Authorization: Bearer <key>`."
               }
             }
           },
@@ -202,7 +202,7 @@
                 "schema": {
                   "type": "string"
                 },
-                "example": "Billing for this account is not active, so live keys are paused. Update it at https://zpl.jaapelst.nl/console/billing; test keys keep working."
+                "example": "Billing for this account is not active, so live keys are paused. Update it at https://caretly.dev/console/billing; test keys keep working."
               }
             }
           },
@@ -243,7 +243,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "An API key from the [console](https://zpl.jaapelst.nl/console/keys), sent as `Authorization: Bearer <key>`. Live keys start with `zpl_live_`, test keys with `zpl_test_`."
+        "description": "An API key from the [console](https://caretly.dev/console/keys), sent as `Authorization: Bearer <key>`. Live keys start with `zpl_live_`, test keys with `zpl_test_`."
       },
       "apiKeyHeader": {
         "type": "apiKey",

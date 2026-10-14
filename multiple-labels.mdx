@@ -11,7 +11,7 @@ One request can render many labels. You get them back as one multi-page PDF, or 
 Every `^XA…^XZ` in the body becomes its own page, and `^PQ` adds copies. Send them as raw ZPL like a single label:
 
 ```bash
-curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+curl -X POST "https://caretly.dev/render?format=pdf" \
   -H "Authorization: Bearer $ZPL_API_KEY" \
   --data-binary @labels.zpl \
   -o labels.pdf
@@ -24,7 +24,7 @@ The `X-Page-Count` response header tells you how many pages the PDF has. With a 
 To render a batch of ZPL files, upload them as `multipart/form-data`, one `file` part per file:
 
 ```bash
-curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+curl -X POST "https://caretly.dev/render?format=pdf" \
   -H "Authorization: Bearer $ZPL_API_KEY" \
   -F file=@first.zpl \
   -F file=@second.zpl \
@@ -46,7 +46,7 @@ curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
 PNG output is a single page. Choose it with `page`, starting at 1 and counted across all files:
 
 ```bash
-curl -X POST "https://zpl.jaapelst.nl/render?format=png&page=2" \
+curl -X POST "https://caretly.dev/render?format=png&page=2" \
   -H "Authorization: Bearer $ZPL_API_KEY" \
   -F file=@first.zpl -F file=@second.zpl \
   -o page-2.png
@@ -57,7 +57,7 @@ curl -X POST "https://zpl.jaapelst.nl/render?format=png&page=2" \
 Labels that embed bitmaps (`~DG`, `^GF`) are large but compress well. Send the body gzip-compressed with a `Content-Encoding: gzip` header (`deflate` works too):
 
 ```bash
-gzip -c labels.zpl | curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+gzip -c labels.zpl | curl -X POST "https://caretly.dev/render?format=pdf" \
   -H "Authorization: Bearer $ZPL_API_KEY" \
   -H "Content-Encoding: gzip" \
   --data-binary @- \
@@ -72,7 +72,7 @@ b=zplboundary$RANDOM
     printf -- '--%s\r\nContent-Disposition: form-data; name="file"; filename="%s"\r\n\r\n' "$b" "$(basename "$f")"
     cat "$f"; printf '\r\n'
   done; printf -- '--%s--\r\n' "$b"; } | gzip -c \
-| curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+| curl -X POST "https://caretly.dev/render?format=pdf" \
     -H "Authorization: Bearer $ZPL_API_KEY" \
     -H "Content-Type: multipart/form-data; boundary=$b" \
     -H "Content-Encoding: gzip" \

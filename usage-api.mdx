@@ -6,11 +6,11 @@ description: "Pull monthly totals, per-day and per-key usage, individual request
 
 The Console API gives you the numbers from the **Usage** and **Billing** pages of the console as JSON. Use it to feed usage into your own reporting, to check costs per printer or warehouse, or to reconcile invoices.
 
-All endpoints are read-only and live under `https://zpl.jaapelst.nl/console/api/v1`.
+All endpoints are read-only and live under `https://caretly.dev/console/api/v1`.
 
 ## Get a key
 
-The Console API uses the same API keys as the renderer. Create one at [zpl.jaapelst.nl/console/keys](https://zpl.jaapelst.nl/console/keys), or use a key you already have, and send it as a bearer token:
+The Console API uses the same API keys as the renderer. Create one at [caretly.dev/console/keys](https://caretly.dev/console/keys), or use a key you already have, and send it as a bearer token:
 
 ```bash
 Authorization: Bearer zpl_live_…
@@ -25,7 +25,7 @@ Every key reads the data of its own organisation only. Revoked keys are refused 
 ## Monthly totals
 
 ```bash
-curl "https://zpl.jaapelst.nl/console/api/v1/usage?month=2026-10" \
+curl "https://caretly.dev/console/api/v1/usage?month=2026-10" \
   -H "Authorization: Bearer $ZPL_KEY"
 ```
 
@@ -48,7 +48,7 @@ For a breakdown, use `/usage/daily` for labels per day and `/usage/keys` for lab
 `/usage/events` lists every billable request, newest first. Each event has its `request_id`, `key_id`, `type` (`live` or `test`), `labels`, `format` and time `at`.
 
 ```bash
-curl "https://zpl.jaapelst.nl/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=500" \
+curl "https://caretly.dev/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=500" \
   -H "Authorization: Bearer $ZPL_KEY"
 ```
 
@@ -73,14 +73,14 @@ curl "https://zpl.jaapelst.nl/console/api/v1/usage/events?from=2026-10-01T00:00:
 When `next_cursor` is not `null`, there are more events. Pass it as `cursor`, with the same `from` and `to`, to get the next page:
 
 ```bash
-curl "https://zpl.jaapelst.nl/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=500&cursor=MTc5MDgyMTU2MDAwMDAwMC5mNDNm…" \
+curl "https://caretly.dev/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=500&cursor=MTc5MDgyMTU2MDAwMDAwMC5mNDNm…" \
   -H "Authorization: Bearer $ZPL_KEY"
 ```
 
 This loop fetches every page with `curl` and `jq`:
 
 ```bash
-url="https://zpl.jaapelst.nl/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=1000"
+url="https://caretly.dev/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=1000"
 cursor=""
 while :; do
   page=$(curl -sf "$url${cursor:+&cursor=$cursor}" -H "Authorization: Bearer $ZPL_KEY")

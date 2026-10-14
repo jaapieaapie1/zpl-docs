@@ -5,11 +5,11 @@ description: "Send raw ZPL to the render endpoint and get back a vector PDF or P
 openapi: "openapi.json POST /render"
 ---
 
-The ZPL renderer exposes a single HTTP endpoint at `https://zpl.jaapelst.nl/render`. Send your ZPL as the raw request body and the response is the rendered label.
+The ZPL renderer exposes a single HTTP endpoint at `https://caretly.dev/render`. Send your ZPL as the raw request body and the response is the rendered label.
 
 ## Get an API key
 
-Every request needs an API key. Create one on the **API keys** page of the [console](https://zpl.jaapelst.nl/console). Start with a test key: it's free, and stamps **TEST** on every label. Then store the key in the `ZPL_API_KEY` environment variable:
+Every request needs an API key. Create one on the **API keys** page of the [console](https://caretly.dev/console). Start with a test key: it's free, and stamps **TEST** on every label. Then store the key in the `ZPL_API_KEY` environment variable:
 
 ```bash
 export ZPL_API_KEY="zpl_test_..."
@@ -22,7 +22,7 @@ Click **Try it** to render the example shipping label directly from this page. P
 ## Example
 
 ```bash
-curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
+curl -X POST "https://caretly.dev/render?format=pdf" \
   -H "Authorization: Bearer $ZPL_API_KEY" \
   -H "Content-Type: text/plain" \
   --data-binary @label.zpl \
@@ -34,7 +34,7 @@ curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
 </Tip>
 
 <Note>
-  Just trying ZPL? The [playground](https://zpl.jaapelst.nl/playground) renders in your browser without a key. It's free, but stamps **PREVIEW** on every label and PDF.
+  Just trying ZPL? The [playground](https://caretly.dev/playground) renders in your browser without a key. It's free, but stamps **PREVIEW** on every label and PDF.
 </Note>
 
 <Card title="Authentication" icon="key" href="/authentication">

@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://zpl.jaapelst.nl/console"
+      "url": "https://caretly.dev/console"
     }
   ],
   "security": [
@@ -298,7 +298,7 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "One of your API keys (`zpl_live_…` or `zpl_test_…`), created at https://zpl.jaapelst.nl/console/keys. Revoked keys are refused immediately."
+        "description": "One of your API keys (`zpl_live_…` or `zpl_test_…`), created at https://caretly.dev/console/keys. Revoked keys are refused immediately."
       }
     },
     "headers": {
@@ -319,7 +319,7 @@
               "$ref": "#/components/schemas/Error"
             },
             "example": {
-              "error": "This API key has been revoked. Send one of your API keys as `Authorization: Bearer <key>`; manage keys at https://zpl.jaapelst.nl/console/keys"
+              "error": "This API key has been revoked. Send one of your API keys as `Authorization: Bearer <key>`; manage keys at https://caretly.dev/console/keys"
             }
           }
         }
