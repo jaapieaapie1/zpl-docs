@@ -157,7 +157,7 @@
     "/api/v1/usage/events": {
       "get": {
         "summary": "List usage events",
-        "description": "The individual billable requests, newest first, a page at a time. Pass `next_cursor` as `cursor` to get the next page, with the same `from` and `to`; it is `null` on the last page. Pages stay stable while new requests arrive.\n\n`from` and `to` may be at most 31 days apart. Leave both out for the last 31 days; give one and the window is 31 days from or up to it.",
+        "description": "Usage events, newest first, a page at a time. Pass `next_cursor` as `cursor` to get the next page, with the same `from` and `to`; it is `null` on the last page. Pages stay stable while new usage arrives.\n\n`from` and `to` may be at most 31 days apart. Leave both out for the last 31 days; give one and the window is 31 days from or up to it.\n\nUsage is recorded about once a second: an event counts the requests one key made in one format in that window (`requests`, from `at` to `until`). Requests with an `Idempotency-Key` are events of their own, so a retry counts once. Older events, from before usage was added up per second, are one request each.",
         "operationId": "listUsageEvents",
         "tags": [
           "Console API"
@@ -507,14 +507,16 @@
           "key_id",
           "type",
           "labels",
+          "requests",
           "format",
-          "at"
+          "at",
+          "until"
         ],
         "properties": {
           "request_id": {
             "type": "string",
             "format": "uuid",
-            "description": "Unique per request."
+            "description": "Unique per event: the id of a single request, or of the window."
           },
           "key_id": {
             "type": "string",
@@ -530,8 +532,13 @@
           },
           "labels": {
             "type": "integer",
-            "description": "Labels (pages) rendered by the request.",
+            "description": "Labels (pages) rendered by the requests of this event.",
             "example": 3
+          },
+          "requests": {
+            "type": "integer",
+            "description": "Requests this event counts: 1 for a single request.",
+            "example": 6
           },
           "format": {
             "type": "string",
@@ -543,7 +550,12 @@
           "at": {
             "type": "string",
             "format": "date-time",
-            "description": "When the request was rendered."
+            "description": "When the (first) request was rendered."
+          },
+          "until": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the last request was rendered; equal to `at` for a single request."
           }
         }
       },

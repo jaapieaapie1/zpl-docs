@@ -1,7 +1,7 @@
 ---
 title: "Read your usage and billing data with the Console API"
 sidebarTitle: "Usage API"
-description: "Pull monthly totals, per-day and per-key usage, individual requests, your API keys and billing status into your own systems as JSON."
+description: "Pull monthly totals, per-day and per-key usage, usage per second, your API keys and billing status into your own systems as JSON."
 ---
 
 The Console API gives you the numbers from the **Usage** and **Billing** pages of the console as JSON. Use it to feed usage into your own reporting, to check costs per printer or warehouse, or to reconcile invoices.
@@ -43,9 +43,11 @@ Leave out `month` for the current month. Months are calendar months in UTC. The 
 
 For a breakdown, use `/usage/daily` for labels per day and `/usage/keys` for labels and requests per key. They take the same `month` parameter.
 
-## Page through individual requests
+## Page through usage events
 
-`/usage/events` lists every billable request, newest first. Each event has its `request_id`, `key_id`, `type` (`live` or `test`), `labels`, `format` and time `at`.
+`/usage/events` lists your usage newest first. Usage is recorded about once a second: an event counts all requests one key made in one format during that second, so a busy key gets one event per second, not one per request. Requests sent with an `Idempotency-Key` are listed one by one, so a retry shows up (and is billed) once.
+
+Each event has an id `request_id`, `key_id`, `type` (`live` or `test`), `labels`, `requests` (how many requests it counts), `format`, and `at` and `until`: when the first and last of those requests were rendered (equal for a single request). Older events, from before usage was added up per second, are one request each.
 
 ```bash
 curl "https://caretly.dev/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&to=2026-10-15T00:00:00Z&limit=500" \
@@ -61,9 +63,11 @@ curl "https://caretly.dev/console/api/v1/usage/events?from=2026-10-01T00:00:00Z&
       "request_id": "7bec9189-d315-4529-96ec-8268b23f6b84",
       "key_id": "01a13a63-d85f-74be-9202-488c7a29b991",
       "type": "live",
-      "labels": 2,
+      "labels": 14,
+      "requests": 6,
       "format": "pdf",
-      "at": "2026-10-13T16:10:00Z"
+      "at": "2026-10-15T16:10:00.120Z",
+      "until": "2026-10-15T16:10:00.940Z"
     }
   ],
   "next_cursor": "MTc5MDgyMTU2MDAwMDAwMC5mNDNm…"
@@ -93,7 +97,7 @@ done
 - `limit` is 100 by default and at most 1000.
 - `from` is inclusive and `to` is exclusive. They are RFC 3339 times and may be at most 31 days apart. Without them you get the last 31 days.
 - Write offsets as `Z`, or encode `+` as `%2B` in the URL.
-- Treat the cursor as opaque. Pages stay stable while new requests come in, so you don't miss or repeat events.
+- Treat the cursor as opaque. Pages stay stable while new usage comes in, so you don't miss or repeat events.
 
 ## Keys and billing
 
