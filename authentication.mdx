@@ -63,7 +63,7 @@ curl -sS -D - -o label.pdf -X POST "https://zpl.jaapelst.nl/render?format=pdf" \
 
 ### Safe retries with Idempotency-Key
 
-A request can time out after the labels were rendered. To retry without paying twice, send an `Idempotency-Key` header with a unique value of up to 255 characters, such as your order or shipment number. Retries with the same API key and `Idempotency-Key` are billed once.
+A request can time out after the labels were rendered. To retry without paying twice, send an `Idempotency-Key` header with a unique value of up to 255 characters, such as your order or shipment number. A retry with the same API key, `Idempotency-Key`, labels and query parameters is billed once. Reusing a key for different labels, or for another page or format, is billed as a new request, so use a new value for every new label. A retry is rendered again, and its `X-Labels-Billed` header shows the full count even though the invoice counts it once.
 
 ```bash
 curl -X POST "https://zpl.jaapelst.nl/render?format=pdf" \

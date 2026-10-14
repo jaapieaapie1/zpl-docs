@@ -84,7 +84,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Any string up to 255 characters, for example an order number. Retries with the same API key and `Idempotency-Key` are billed once.",
+            "description": "Any string up to 255 characters, for example an order number. A retry with the same API key, `Idempotency-Key`, labels and query parameters is billed once; different labels or parameters are billed as a new request.",
             "schema": {
               "type": "string",
               "maxLength": 255
