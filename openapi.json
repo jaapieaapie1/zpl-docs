@@ -149,6 +149,18 @@
                 "schema": {
                   "type": "integer"
                 }
+              },
+              "RateLimit-Limit": {
+                "description": "The burst size of your API key's rate limit: how many requests it can make at once.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests your API key can still make at once before it is rate limited.",
+                "schema": {
+                  "type": "integer"
+                }
               }
             },
             "content": {
@@ -223,6 +235,37 @@
                 "schema": {
                   "type": "string"
                 }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests for this API key. The rate limit is generous (about 50 requests per second with bursts of 200) and stops runaway loops. Wait the number of seconds in `Retry-After` and retry. See [Rate limits](/authentication#rate-limits).",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying, rounded up.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Limit": {
+                "description": "The burst size of your API key's rate limit: how many requests it can make at once.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests your API key can still make at once before it is rate limited.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "Too many requests for this API key: the limit is 50 per second, with bursts of 200. Retry after 1 s."
               }
             }
           }

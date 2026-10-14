@@ -73,6 +73,25 @@ curl -X POST "https://caretly.dev/render?format=pdf" \
   -o label.pdf
 ```
 
+## Rate limits
+
+Each API key can make about 50 requests per second, with bursts of up to 200 at once. The limit is per key, not per account, and it's approximate. It's generous on purpose: it's there to stop runaway loops, not to limit normal use. Several files in one [multipart request](/multiple-labels) count as one request.
+
+Over the limit, the API returns `429 Too Many Requests` with a `Retry-After` header. Wait that many seconds, then retry the request. A `429` is never billed.
+
+```text
+HTTP/1.1 429 Too Many Requests
+Retry-After: 1
+RateLimit-Limit: 200
+RateLimit-Remaining: 0
+
+Too many requests for this API key: the limit is 50 per second, with bursts of 200. Retry after 1 s.
+```
+
+Every successful response has `RateLimit-Limit`, the burst size, and `RateLimit-Remaining`, the requests you can still make at once.
+
+Need more? Email [jaap@jaapelst.nl](mailto:jaap@jaapelst.nl).
+
 ## Renew, revoke and expiry
 
 Manage your keys on the **API keys** page of the console.
@@ -91,6 +110,7 @@ Errors have a plain-text body that says what went wrong and links to the console
 | --- | --- | --- |
 | `401` | The key is missing, not valid, expired or revoked. The response has `WWW-Authenticate: Bearer realm="zpl"`. | Check that you send the full key in `Authorization: Bearer <key>`. Create or renew a key in the console. |
 | `402` | Billing for your account isn't active, so live keys are paused. | Fix your subscription on the console's **Billing** page. Test keys keep working meanwhile. |
+| `429` | Too many requests for this key. The response has `Retry-After`. | Wait `Retry-After` seconds and retry. See [Rate limits](#rate-limits). |
 
 For example, a request without a key returns:
 
