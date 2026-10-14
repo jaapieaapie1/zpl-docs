@@ -32,17 +32,37 @@
           "GET /api/v1/billing"
         ]
       }
-    ]
+    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Playground",
+          "icon": "pen-to-square",
+          "href": "https://zpl.jaapelst.nl/playground"
+        },
+        {
+          "anchor": "Console",
+          "icon": "key",
+          "href": "https://zpl.jaapelst.nl/console"
+        }
+      ]
+    }
   },
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg"
   },
   "navbar": {
+    "links": [
+      {
+        "label": "Playground",
+        "href": "https://zpl.jaapelst.nl/playground"
+      }
+    ],
     "primary": {
       "type": "button",
-      "label": "Playground",
-      "href": "https://zpl.jaapelst.nl/playground"
+      "label": "Console",
+      "href": "https://zpl.jaapelst.nl/console"
     }
   },
   "contextual": {
