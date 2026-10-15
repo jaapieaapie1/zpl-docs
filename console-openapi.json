@@ -373,6 +373,7 @@
         "required": [
           "month",
           "live_labels",
+          "free_labels",
           "test_labels",
           "requests",
           "estimated_cost"
@@ -384,8 +385,13 @@
           },
           "live_labels": {
             "type": "integer",
-            "description": "Billed labels.",
+            "description": "Live labels, including free_labels.",
             "example": 6170
+          },
+          "free_labels": {
+            "type": "integer",
+            "description": "Live labels rendered with free access: never billed, also after it ended.",
+            "example": 0
           },
           "test_labels": {
             "type": "integer",

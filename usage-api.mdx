@@ -33,13 +33,14 @@ curl "https://caretly.dev/console/api/v1/usage?month=2026-10" \
 {
   "month": "2026-10",
   "live_labels": 6170,
+  "free_labels": 0,
   "test_labels": 500,
   "requests": 2253,
   "estimated_cost": { "amount": 12.34, "currency": "EUR" }
 }
 ```
 
-Leave out `month` for the current month. Months are calendar months in UTC. The estimated cost is live labels times the price per label; your invoice is authoritative.
+Leave out `month` for the current month. Months are calendar months in UTC. `free_labels` are the live labels rendered while your organisation had free access; they are never billed, also after the free access ends. The estimated cost is the other live labels times the price per label; your invoice is authoritative.
 
 For a breakdown, use `/usage/daily` for labels per day and `/usage/keys` for labels and requests per key. They take the same `month` parameter.
 
