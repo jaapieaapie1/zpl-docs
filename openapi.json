@@ -268,6 +268,31 @@
                 "example": "Too many requests for this API key: the limit is 50 per second, with bursts of 200. Retry after 1 s."
               }
             }
+          },
+          "503": {
+            "description": "The renderer is busy: too many requests are waiting, or this request waited more than 5 seconds for its turn. The request is not billed. Wait the number of seconds in `Retry-After` and retry.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before retrying.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "Server-Timing": {
+                "description": "With `timings`: the stages so far, plus `shed;desc=\"…\"` naming why the request was turned away (`queue full` or `waited too long`).",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                },
+                "example": "The renderer is busy: too many requests are waiting. Retry after 1 s."
+              }
+            }
           }
         },
         "security": [
