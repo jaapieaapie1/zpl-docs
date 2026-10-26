@@ -1,0 +1,129 @@
+---
+title: "Use Caretly from AI assistants with MCP"
+sidebarTitle: "MCP server"
+description: "Connect Claude, Cursor or VS Code to the Caretly MCP server to render ZPL labels and read your usage and billing from a chat."
+---
+
+Caretly runs a [Model Context Protocol](https://modelcontextprotocol.io) server at `https://caretly.dev/mcp`. Connect it to an AI assistant and you can ask it to preview a label, convert ZPL to PDF, or check this month's usage, without writing any code.
+
+The server uses the same API keys as the renderer. It sends your key to the renderer and the console for every call, and stores nothing.
+
+## Get a key
+
+Create a key at [caretly.dev/console/keys](https://caretly.dev/console/keys). See [Authentication](/authentication) for the details.
+
+<Tip>
+  Use a **test** key. Labels get a TEST watermark, but renders are free, and test keys read your organisation's usage and billing just like live keys. An assistant may render a label more often than you expect.
+</Tip>
+
+With a live key, every label the assistant renders is billed, like any other request to `/render`.
+
+## Connect your assistant
+
+The server speaks Streamable HTTP. Send your key as `Authorization: Bearer <key>`.
+
+<Tabs>
+  <Tab title="Claude Code">
+    ```bash
+    claude mcp add --transport http caretly https://caretly.dev/mcp \
+      --header "Authorization: Bearer zpl_test_..."
+    ```
+  </Tab>
+  <Tab title="Cursor">
+    Add the server to `~/.cursor/mcp.json`, or to `.cursor/mcp.json` in your project:
+
+    ```json
+    {
+      "mcpServers": {
+        "caretly": {
+          "url": "https://caretly.dev/mcp",
+          "headers": {
+            "Authorization": "Bearer zpl_test_..."
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="VS Code">
+    Add the server to `.vscode/mcp.json`. VS Code asks for the key once and stores it securely:
+
+    ```json
+    {
+      "inputs": [
+        {
+          "type": "promptString",
+          "id": "caretly-key",
+          "description": "Caretly API key",
+          "password": true
+        }
+      ],
+      "servers": {
+        "caretly": {
+          "type": "http",
+          "url": "https://caretly.dev/mcp",
+          "headers": {
+            "Authorization": "Bearer ${input:caretly-key}"
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Claude Desktop">
+    Claude Desktop connects to the server through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote), which needs Node.js. Open **Settings**, then **Developer**, then **Edit Config**, and add:
+
+    ```json
+    {
+      "mcpServers": {
+        "caretly": {
+          "command": "npx",
+          "args": [
+            "mcp-remote",
+            "https://caretly.dev/mcp",
+            "--header",
+            "Authorization:${CARETLY_AUTH}"
+          ],
+          "env": {
+            "CARETLY_AUTH": "Bearer zpl_test_..."
+          }
+        }
+      }
+    }
+    ```
+
+    Restart Claude Desktop afterwards.
+  </Tab>
+</Tabs>
+
+<Warning>
+  These config files hold your key in plain text. Don't commit them to a repository.
+</Warning>
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `render_zpl` | Renders ZPL to a PNG, shown in the chat, or to a PDF with every page. Takes `format` (`png` or `pdf`), `page`, `dpmm` and `idempotency_key`, like [`/render`](/quickstart). |
+| `whoami` | Shows which key is in use (live or test, organisation, expiry) and checks that the console still accepts it. |
+| `list_keys` | Lists your organisation's API keys. Never their tokens. |
+| `get_usage` | Monthly totals and the estimated cost. |
+| `get_daily_usage` | Labels per day for a month. |
+| `get_usage_by_key` | Labels and requests per key for a month. |
+| `list_usage_events` | Usage events, newest first, a page at a time. |
+| `get_billing` | Subscription status, price per label and spending limit. |
+
+The usage and billing tools return the same data as the [Console API](/usage-api). All of them are read-only: the assistant can't create, renew or revoke keys, or change your billing.
+
+## Try it
+
+Once connected, ask your assistant things like:
+
+- "Render this ZPL and show me the label: `^XA^FO50,50^A0N,50,50^FDHello^FS^XZ`"
+- "Convert `label.zpl` to a PDF at 300 dpi." (Set `dpmm` to `12`.)
+- "How many live labels did we render this month, and what will it cost?"
+- "Which API key was used most last month?"
+
+## Errors
+
+A request without a key, or with something that isn't a Caretly key, returns `401` with `WWW-Authenticate: Bearer`, before any tool runs. Errors from the renderer and the console, such as an expired key, a `402` for paused billing or a `429` rate limit, come back to the assistant as tool errors with the same message. See [Authentication](/authentication#errors).
