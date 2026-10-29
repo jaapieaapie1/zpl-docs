@@ -19,10 +19,10 @@ Keys look like `zpl_live_…` or `zpl_test_…`.
 Send the key in the `Authorization` header:
 
 ```bash
-export ZPL_API_KEY="zpl_test_..."
+export CARETLY_API_KEY="zpl_test_..."
 
 curl -X POST "https://caretly.dev/render?format=pdf" \
-  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Authorization: Bearer $CARETLY_API_KEY" \
   --data-binary @label.zpl \
   -o label.pdf
 ```
@@ -57,7 +57,7 @@ The `X-Labels-Billed` response header tells you how many labels the request was 
 
 ```bash
 curl -sS -D - -o label.pdf -X POST "https://caretly.dev/render?format=pdf" \
-  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Authorization: Bearer $CARETLY_API_KEY" \
   --data-binary @label.zpl | grep -i x-labels-billed
 ```
 
@@ -67,7 +67,7 @@ A request can time out after the labels were rendered. To retry without paying t
 
 ```bash
 curl -X POST "https://caretly.dev/render?format=pdf" \
-  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Authorization: Bearer $CARETLY_API_KEY" \
   -H "Idempotency-Key: order-10042" \
   --data-binary @label.zpl \
   -o label.pdf

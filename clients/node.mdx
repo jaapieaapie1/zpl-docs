@@ -1,0 +1,206 @@
+---
+title: "Node.js client"
+sidebarTitle: "Node.js"
+description: "Render ZPL labels to PDF or PNG from Node.js, Deno, Bun or edge runtimes with @caretly/caretly. TypeScript types, typed errors and safe retries."
+icon: "node-js"
+---
+
+The `@caretly/caretly` package has no runtime dependencies and is built on the standard `fetch`. It ships ESM, CommonJS and TypeScript types.
+
+- Package: [`@caretly/caretly` on npm](https://www.npmjs.com/package/@caretly/caretly)
+- Source: [`clients/node`](https://github.com/jaapieaapie1/zpl/tree/main/clients/node)
+
+## Install
+
+```bash
+npm install @caretly/caretly
+```
+
+The package name has the `@caretly` scope. Import from `@caretly/caretly`, not `caretly`.
+
+## Quickstart
+
+Create a test key in the [console](https://caretly.dev/console) and set it in your environment:
+
+```bash
+export CARETLY_API_KEY="zpl_test_..."
+```
+
+Render a label to PDF and save it:
+
+```ts
+import { Caretly } from "@caretly/caretly";
+
+const caretly = new Caretly(); // reads CARETLY_API_KEY
+
+const pdf = await caretly.render("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ");
+await pdf.saveTo("label.pdf");
+console.log(pdf.pageCount, pdf.labelsBilled);
+```
+
+## ESM, CommonJS and runtimes
+
+The package works with `import` and `require`:
+
+```js
+const { Caretly } = require("@caretly/caretly");
+```
+
+`instanceof` checks on errors work even when an application loads both builds.
+
+It runs on Node.js 18 or newer. The core also runs in Deno, Bun and edge runtimes that have `fetch`. Only `saveTo` needs `node:fs`. Elsewhere, read `result.bytes` instead.
+
+<Warning>
+  Keep your API key on the server. Don't use the client in browser code, where anyone can read the key.
+</Warning>
+
+## Render a page as PNG
+
+A PNG holds one page. Choose it with `page`, starting at 1:
+
+```ts
+const png = await caretly.render(zpl, { format: "png", page: 2, dpmm: 12 });
+await png.saveTo("page-2.png");
+
+// Shorthand for format and page:
+const page2 = await caretly.renderPng(zpl, 2);
+```
+
+`caretly.renderPdf(zpl)` is the matching shorthand for a PDF.
+
+## Render several files
+
+`renderFiles` sends the files as `multipart/form-data`. Each file starts from a fresh printer state, and pages follow the order of the files:
+
+```ts
+import { readFile } from "node:fs/promises";
+
+const result = await caretly.renderFiles([
+  { name: "order-1.zpl", content: zplText },                     // string
+  { name: "order-2.zpl", content: await readFile("order-2.zpl") }, // Uint8Array
+  { name: "order-3.zpl", content: blob },                         // Blob
+]);
+console.log(result.filePageCounts); // [2, 1, 1]
+```
+
+## Render options
+
+`render(zpl, options)` and `renderFiles(files, options)` take:
+
+| Option | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `format` | `"pdf"`, `"png"` | `"pdf"` | A PDF holds every page. A PNG is one page. |
+| `page` | integer, 1 or more | 1 | The page shown in a PNG. |
+| `dpmm` | `6`, `8`, `12`, `24` | 8 | Printer resolution in dots per millimetre. |
+| `timings` | boolean | off | Ask for server timings in `result.serverTiming`. |
+| `idempotencyKey` | string, up to 255 characters | generated | A retry with the same key and content is billed once. |
+| `compress` | boolean | off | Gzip the request body. |
+| `signal` | `AbortSignal` | | Cancel the call, including waits between retries. |
+
+Options you leave out aren't sent, so the server defaults apply. An invalid `format`, `page`, `dpmm` or `idempotencyKey` throws a `RangeError` before any request.
+
+## Read the result
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `bytes` | `Uint8Array` | The PDF or PNG. |
+| `contentType` | `string` | `application/pdf` or `image/png`. |
+| `pageCount` | `number` | Total pages across the input. |
+| `filePageCounts` | `number[]` | Pages per file for `renderFiles`. Empty otherwise. |
+| `labelsBilled` | `number \| null` | Labels billed. `0` for a test key, `null` without keys. |
+| `rateLimit` | `{ limit, remaining } \| null` | The key's burst size and what's left of it. |
+| `serverTiming` | `string \| null` | The raw `Server-Timing` header, with `timings`. |
+| `headers` | `Headers` | All response headers. |
+| `saveTo(path)` | `Promise<void>` | Writes `bytes` to a file. Needs `node:fs`. |
+
+```ts
+const result = await caretly.render(zpl);
+console.log(`${result.pageCount} page(s), ${result.labelsBilled} billed`);
+if (result.rateLimit) {
+  console.log(`${result.rateLimit.remaining} of ${result.rateLimit.limit} requests left`);
+}
+```
+
+## Handle errors
+
+Every error from the API or the network extends `CaretlyError`:
+
+| Class | When |
+| --- | --- |
+| `BadRequestError` | `400`: ZPL parse error, invalid parameter, page out of range. |
+| `AuthenticationError` | `401`: API key missing, invalid, expired or revoked. |
+| `PaymentRequiredError` | `402`: billing inactive, live keys paused. |
+| `PayloadTooLargeError` | `413`: body over 100 MiB after decompression. |
+| `UnsupportedEncodingError` | `415`: unsupported `Content-Encoding`. |
+| `RateLimitError` | `429`: too many requests, after retries ran out. |
+| `OverloadedError` | `503`: server busy, not billed, after retries ran out. |
+| `APIError` | Base of the above, and any other status, such as `500`. |
+| `ConnectionError` | The request didn't reach the server, or the connection broke. |
+| `TimeoutError` | An attempt took longer than `timeoutMs`. |
+
+`APIError` has `status`, `message` (the server's text), `retryAfter` (seconds or `null`) and `headers`.
+
+```ts
+import { AuthenticationError, BadRequestError, RateLimitError } from "@caretly/caretly";
+
+try {
+  await caretly.render(zpl);
+} catch (error) {
+  if (error instanceof BadRequestError) console.error("Invalid label:", error.message);
+  else if (error instanceof AuthenticationError) console.error("Check your API key");
+  else if (error instanceof RateLimitError) console.error(`Retry in ${error.retryAfter} s`);
+  else throw error;
+}
+```
+
+Aborting with your own `signal` rejects with the signal's reason, an `AbortError` by default, not a `CaretlyError`.
+
+## Retries and idempotency
+
+The client retries `429`, `503` and connection errors up to `maxRetries` times, 2 by default. It waits `Retry-After` seconds when the server sends it. Otherwise it backs off 0.5 s, 1 s, 2 s, up to 8 s. Timeouts and other statuses aren't retried.
+
+When retries are on and you pass no `idempotencyKey`, the client generates a UUID per call and sends it on every attempt, so a retried request is never billed twice. Set your own key, such as an order number, to make retries across calls or processes safe too:
+
+```ts
+const pdf = await caretly.render(zpl, { idempotencyKey: "order-10042" });
+```
+
+## Configuration
+
+```ts
+const caretly = new Caretly({
+  apiKey: process.env.CARETLY_API_KEY, // the default
+  baseUrl: "http://localhost:3000",   // default: https://caretly.dev
+  timeoutMs: 10_000,                  // per attempt, default 30000
+  maxRetries: 3,                      // default 2, 0 turns retries off
+});
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `apiKey` | `process.env.CARETLY_API_KEY` | Sent as `Authorization: Bearer`. Optional for self-hosted servers. |
+| `baseUrl` | `https://caretly.dev` | Point at a self-hosted server. |
+| `timeoutMs` | `30000` | Timeout per attempt, including reading the response. |
+| `maxRetries` | `2` | Retries after `429`, `503` or a connection error. |
+| `fetch` | global `fetch` | A custom `fetch`, for example for a proxy or for tests. |
+| `sleep` | timer | Waits between retries. Replace it in tests. |
+
+### Custom fetch
+
+Pass your own `fetch` to add logging, route requests through a proxy, or mock them in tests:
+
+```ts
+const caretly = new Caretly({
+  fetch: async (input, init) => {
+    const response = await fetch(input, init);
+    console.log(init?.method, String(input), response.status);
+    return response;
+  },
+});
+```
+
+## Health check
+
+```ts
+await caretly.health(); // true when GET /health answers "ok"
+```

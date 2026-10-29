@@ -1,0 +1,185 @@
+---
+title: "C# / .NET client"
+sidebarTitle: "C# / .NET"
+description: "Render ZPL labels to PDF or PNG from C# and .NET with the Caretly NuGet package. Async, HttpClient injection, typed exceptions and safe retries."
+icon: "microsoft"
+---
+
+The `Caretly` package is async throughout and has no runtime dependencies. It targets `netstandard2.0` and `net8.0`, so it runs on .NET Framework 4.6.1+, .NET Core and .NET 5+.
+
+- Package: [`Caretly` on NuGet](https://www.nuget.org/packages/Caretly)
+- Source: [`clients/csharp`](https://github.com/jaapieaapie1/zpl/tree/main/clients/csharp)
+
+## Install
+
+```bash
+dotnet add package Caretly
+```
+
+## Quickstart
+
+Create a test key in the [console](https://caretly.dev/console) and set it in your environment:
+
+```bash
+export CARETLY_API_KEY="zpl_test_..."
+```
+
+Render a label to PDF and save it:
+
+```csharp
+using Caretly;
+
+using var client = new CaretlyClient(); // reads CARETLY_API_KEY
+
+var pdf = await client.RenderAsync("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ");
+await pdf.SaveToAsync("label.pdf");
+Console.WriteLine($"{pdf.PageCount} page(s), {pdf.LabelsBilled} billed");
+```
+
+You can also pass the key directly: `new CaretlyClient("zpl_test_...")`.
+
+## Render a page as PNG
+
+A PNG holds one page. Choose it with `Page`, starting at 1:
+
+```csharp
+var png = await client.RenderAsync(zpl, new RenderOptions
+{
+    Format = RenderFormat.Png,
+    Page = 2,
+    Dpmm = 12, // 300 dpi
+});
+await png.SaveToAsync("page-2.png");
+
+// Shorthand for format and page:
+var page2 = await client.RenderPngAsync(zpl, page: 2);
+```
+
+`client.RenderPdfAsync(zpl)` is the matching shorthand for a PDF.
+
+## Render several files
+
+`RenderFilesAsync` sends the files as `multipart/form-data`. Each file starts from a fresh printer state, and pages follow the given order:
+
+```csharp
+var result = await client.RenderFilesAsync(new[]
+{
+    new ZplFile("order-1.zpl", order1Zpl),
+    ZplFile.FromPath("order-2.zpl"),
+});
+Console.WriteLine(string.Join(", ", result.FilePageCounts)); // "2, 1"
+```
+
+`ZplFile` takes a name and the ZPL as a `string` or `byte[]`. `ZplFile.FromPath` reads a file from disk.
+
+## Render options
+
+| Property | Values | Default (server) | Meaning |
+| --- | --- | --- | --- |
+| `Format` | `RenderFormat.Pdf`, `RenderFormat.Png` | `Pdf` | A PDF holds every page. A PNG is one page. |
+| `Page` | 1 or more | 1 | The page of a PNG, counted across all files. |
+| `Dpmm` | 6, 8, 12, 24 | 8 | Dots per millimetre (152, 203, 300 or 600 dpi). |
+| `Timings` | `bool` | off | Return per-stage timings in `ServerTiming`. |
+| `IdempotencyKey` | up to 255 ASCII characters | generated | A repeat with the same key and labels is billed once. |
+| `Compress` | `bool` | off | Gzip the request body. |
+
+An invalid `Page`, `Dpmm` or `IdempotencyKey` throws an `ArgumentException` before sending.
+
+## Read the result
+
+`RenderResult` exposes:
+
+| Property | Type | Meaning |
+| --- | --- | --- |
+| `Content` | `byte[]` | The PDF or PNG. `SaveTo(path)` and `SaveToAsync(path)` write it to a file. |
+| `ContentType` | `string` | `application/pdf` or `image/png`. |
+| `PageCount` | `int` | Total pages across the input. |
+| `FilePageCounts` | `IReadOnlyList<int>` | Pages per file for `RenderFilesAsync`. Empty otherwise. |
+| `LabelsBilled` | `int?` | Labels billed. `0` for a test key, `null` without keys. |
+| `RateLimit` | `RateLimitInfo?` | `Limit` (burst size) and `Remaining`. |
+| `ServerTiming` | `string?` | The raw `Server-Timing` header, with `Timings`. |
+
+```csharp
+Console.WriteLine($"{result.PageCount} page(s), {result.LabelsBilled} billed");
+if (result.RateLimit is { } rate)
+{
+    Console.WriteLine($"{rate.Remaining} of {rate.Limit} requests left");
+}
+```
+
+## Handle errors
+
+Every error derives from `CaretlyException`. Error responses throw a `CaretlyApiException` subclass with `StatusCode`, `ResponseBody` (the server's message) and `RetryAfter`:
+
+| Status | Exception | When |
+| --- | --- | --- |
+| `400` | `BadRequestException` | ZPL parse error, invalid parameter, page out of range. |
+| `401` | `AuthenticationException` | Key missing, invalid, expired or revoked. |
+| `402` | `PaymentRequiredException` | Billing inactive, live keys paused. |
+| `413` | `PayloadTooLargeException` | Body over 100 MiB after decompression. |
+| `415` | `UnsupportedEncodingException` | Unsupported `Content-Encoding`. |
+| `429` | `RateLimitedException` | Too many requests, after retries ran out. |
+| `503` | `OverloadedException` | Server busy, not billed, after retries ran out. |
+| Other | `CaretlyApiException` | Any other status, including `5xx`. |
+| | `CaretlyConnectionException` | The server couldn't be reached. |
+| | `CaretlyTimeoutException` | An attempt took longer than `Timeout`. |
+
+```csharp
+try
+{
+    await client.RenderAsync(zpl);
+}
+catch (BadRequestException e)
+{
+    Console.Error.WriteLine($"Invalid label: {e.ResponseBody}");
+}
+catch (AuthenticationException)
+{
+    Console.Error.WriteLine("Check your API key");
+}
+catch (CaretlyApiException e) when (e.StatusCode >= 500)
+{
+    Console.Error.WriteLine($"Server error {e.StatusCode}");
+}
+```
+
+Every method takes an optional `CancellationToken`. Cancelling it throws an `OperationCanceledException`, not a `CaretlyTimeoutException`.
+
+## Retries and idempotency
+
+The client retries `429` and `503` responses and connection errors up to `MaxRetries` times, 2 by default. It waits `Retry-After` when the server sends it. Otherwise it backs off 0.5 s, 1 s, 2 s, up to 8 s. Timeouts and other errors aren't retried.
+
+When retries are on and you don't set `IdempotencyKey`, the client generates a UUID once per call and sends it with every attempt, so a retried request is never billed twice. Set your own key, such as an order number, to make retries across calls or processes safe too:
+
+```csharp
+var pdf = await client.RenderAsync(zpl, new RenderOptions { IdempotencyKey = "order-10042" });
+```
+
+## Configuration
+
+```csharp
+using var client = new CaretlyClient(new CaretlyClientOptions
+{
+    ApiKey = "zpl_live_...",            // default: CARETLY_API_KEY
+    BaseUrl = "http://localhost:3000",  // default: https://caretly.dev
+    Timeout = TimeSpan.FromSeconds(60), // per attempt, default 30 s
+    MaxRetries = 3,                     // default 2, 0 turns retries off
+});
+```
+
+### Inject an HttpClient
+
+Pass your own `HttpClient`, for example from `IHttpClientFactory`. The Caretly client doesn't dispose it. When `BaseUrl` isn't set, it uses the `HttpClient.BaseAddress` if there is one.
+
+```csharp
+services.AddHttpClient("caretly", http => http.BaseAddress = new Uri("https://caretly.dev"));
+services.AddSingleton(sp => new CaretlyClient(
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("caretly"),
+    new CaretlyClientOptions { ApiKey = configuration["Caretly:ApiKey"] }));
+```
+
+## Health check
+
+```csharp
+bool up = await client.HealthAsync(); // true when GET /health answers "ok"
+```

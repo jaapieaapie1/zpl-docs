@@ -12,7 +12,7 @@ Every `^XA…^XZ` in the body becomes its own page, and `^PQ` adds copies. Send 
 
 ```bash
 curl -X POST "https://caretly.dev/render?format=pdf" \
-  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Authorization: Bearer $CARETLY_API_KEY" \
   --data-binary @labels.zpl \
   -o labels.pdf
 ```
@@ -25,7 +25,7 @@ To render a batch of ZPL files, upload them as `multipart/form-data`, one `file`
 
 ```bash
 curl -X POST "https://caretly.dev/render?format=pdf" \
-  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Authorization: Bearer $CARETLY_API_KEY" \
   -F file=@first.zpl \
   -F file=@second.zpl \
   -F file=@third.zpl \
@@ -47,7 +47,7 @@ PNG output is a single page. Choose it with `page`, starting at 1 and counted ac
 
 ```bash
 curl -X POST "https://caretly.dev/render?format=png&page=2" \
-  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Authorization: Bearer $CARETLY_API_KEY" \
   -F file=@first.zpl -F file=@second.zpl \
   -o page-2.png
 ```
@@ -58,7 +58,7 @@ Labels that embed bitmaps (`~DG`, `^GF`) are large but compress well. Send the b
 
 ```bash
 gzip -c labels.zpl | curl -X POST "https://caretly.dev/render?format=pdf" \
-  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Authorization: Bearer $CARETLY_API_KEY" \
   -H "Content-Encoding: gzip" \
   --data-binary @- \
   -o labels.pdf
@@ -73,7 +73,7 @@ b=zplboundary$RANDOM
     cat "$f"; printf '\r\n'
   done; printf -- '--%s--\r\n' "$b"; } | gzip -c \
 | curl -X POST "https://caretly.dev/render?format=pdf" \
-    -H "Authorization: Bearer $ZPL_API_KEY" \
+    -H "Authorization: Bearer $CARETLY_API_KEY" \
     -H "Content-Type: multipart/form-data; boundary=$b" \
     -H "Content-Encoding: gzip" \
     --data-binary @- \

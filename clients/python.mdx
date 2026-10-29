@@ -1,0 +1,202 @@
+---
+title: "Python client"
+sidebarTitle: "Python"
+description: "Render ZPL labels to PDF or PNG from Python with the caretly package. Sync and asyncio clients, typed errors and safe retries."
+icon: "python"
+---
+
+The `caretly` package has a sync client, `caretly.Client`, and an asyncio client, `caretly.AsyncClient`, with the same API. It's typed and built on [`httpx`](https://www.python-httpx.org/).
+
+- Package: [`caretly` on PyPI](https://pypi.org/project/caretly/)
+- Source: [`clients/python`](https://github.com/jaapieaapie1/zpl/tree/main/clients/python)
+
+## Install
+
+```bash
+pip install caretly
+```
+
+The package needs Python 3.9 or newer.
+
+## Quickstart
+
+Create a test key in the [console](https://caretly.dev/console) and set it in your environment:
+
+```bash
+export CARETLY_API_KEY="zpl_test_..."
+```
+
+Render a label to PDF and save it:
+
+```python
+import caretly
+
+with caretly.Client() as client:  # reads CARETLY_API_KEY
+    result = client.render("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ")
+    result.save("label.pdf")
+    print(result.page_count, result.labels_billed)
+```
+
+`zpl` can be a `str`, sent as UTF-8, or `bytes`.
+
+## Sync and async
+
+Use `caretly.AsyncClient` in asyncio code. Its methods are coroutines, and it closes with `await client.aclose()` or `async with`:
+
+```python
+import asyncio
+import caretly
+
+
+async def main() -> None:
+    async with caretly.AsyncClient() as client:
+        result = await client.render("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ")
+        result.save("label.pdf")
+
+
+asyncio.run(main())
+```
+
+Close a client when you're done with it, with `client.close()` or a `with` block, to release its connections. Create one client and reuse it for many renders.
+
+## Render a page as PNG
+
+A PNG holds one page. Choose it with `page`, starting at 1:
+
+```python
+png = client.render(zpl, format="png", page=2, dpmm=12)
+png.save("page-2.png")
+
+# Shorthand for format and page:
+png = client.render_png(zpl, 2)
+```
+
+`client.render_pdf(zpl)` is the matching shorthand for a PDF.
+
+## Render several files
+
+`render_files` sends the files as `multipart/form-data`. Each file starts from a fresh printer state, and pages follow the order of the files:
+
+```python
+result = client.render_files({"order-1.zpl": zpl_1, "order-2.zpl": zpl_2})
+print(result.file_page_counts)  # (2, 1)
+```
+
+Pass a mapping of name to content, or a sequence of `(name, content)` pairs. Content is `str` or `bytes`.
+
+## Render options
+
+`render` and `render_files` take these keyword arguments:
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `format` | `"pdf"` | `"pdf"` holds every page. `"png"` is the page chosen with `page`. |
+| `page` | server: 1 | For PNG, the page to render, from 1. Counts across all files. |
+| `dpmm` | server: 8 | Printer resolution in dots per millimetre: 6, 8, 12 or 24. |
+| `timings` | `False` | Ask for a `Server-Timing` header. |
+| `idempotency_key` | generated | Up to 255 characters. A retry with the same key and content is billed once. |
+| `compress` | `False` | Gzip the request body. |
+
+An out-of-range `page` or `dpmm` raises `ValueError` before anything is sent.
+
+## Read the result
+
+`RenderResult` is a frozen dataclass:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `content` | `bytes` | The PDF or PNG. `save(path)` writes it and returns a `pathlib.Path`. |
+| `content_type` | `str` | `application/pdf` or `image/png`. |
+| `page_count` | `int` | Total pages across the input. |
+| `file_page_counts` | `tuple[int, ...]` | Pages per file for `render_files`. `()` otherwise. |
+| `labels_billed` | `int \| None` | Labels billed. `0` for a test key, `None` without keys. |
+| `rate_limit` | `RateLimit \| None` | `limit` (burst size) and `remaining`. |
+| `server_timing` | `str \| None` | The raw `Server-Timing` header, with `timings=True`. |
+
+```python
+result = client.render(zpl)
+print(f"{result.page_count} page(s), {result.labels_billed} billed")
+if result.rate_limit:
+    print(f"{result.rate_limit.remaining} of {result.rate_limit.limit} requests left")
+```
+
+## Handle errors
+
+All errors derive from `caretly.CaretlyError`:
+
+| Exception | When |
+| --- | --- |
+| `BadRequestError` | `400`: ZPL parse error, invalid parameter, page out of range. |
+| `AuthenticationError` | `401`: API key missing, invalid, expired or revoked. |
+| `PaymentRequiredError` | `402`: billing inactive, live keys paused. |
+| `PayloadTooLargeError` | `413`: body over 100 MiB after decompression. |
+| `UnsupportedEncodingError` | `415`: unsupported `Content-Encoding`. |
+| `RateLimitError` | `429`: too many requests, after retries ran out. |
+| `OverloadedError` | `503`: server busy, not billed, after retries ran out. |
+| `APIError` | Base of the above, and any other status, such as `500`. |
+| `APIConnectionError` | No response: network or protocol failure. |
+| `APITimeoutError` | The request timed out. A subclass of `APIConnectionError`. |
+
+`APIError` has `status_code`, `message` (the server's plain-text explanation), `retry_after` (seconds or `None`) and `response` (the `httpx.Response`).
+
+```python
+try:
+    client.render(zpl)
+except caretly.BadRequestError as e:
+    print("Fix the label:", e.message)
+except caretly.AuthenticationError:
+    print("Check your API key")
+except caretly.APIError as e:
+    print(e.status_code, e.message)
+```
+
+## Retries and idempotency
+
+The client retries `429` and `503` responses and connection errors up to `max_retries` times, 2 by default. It waits `Retry-After` seconds when the server sends it. Otherwise it backs off 0.5 s, 1 s, 2 s, up to 8 s. Other statuses aren't retried.
+
+Timeouts aren't retried either: the client raises `APITimeoutError` on the first one, because the server may still be rendering.
+
+When retries are on and you don't set `idempotency_key`, the client generates a UUID per call and sends it on every attempt, so a retried request is never billed twice. Set your own key, such as an order number, to make retries across calls or processes safe too:
+
+```python
+result = client.render(zpl, idempotency_key="order-10042")
+```
+
+## Configuration
+
+```python
+client = caretly.Client(
+    api_key="zpl_live_...",            # default: CARETLY_API_KEY
+    base_url="http://localhost:3000",  # default: https://caretly.dev
+    timeout=10.0,                      # seconds, an httpx.Timeout, or None
+    max_retries=3,                     # default: 2, 0 turns retries off
+)
+```
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `api_key` | `$CARETLY_API_KEY` | Sent as `Authorization: Bearer`. Optional for self-hosted servers. |
+| `base_url` | `https://caretly.dev` | Server URL. |
+| `timeout` | `30.0` | Seconds per request, an `httpx.Timeout`, or `None` for no timeout. |
+| `max_retries` | `2` | Retries for `429`, `503` and connection errors. |
+| `http_client` | new client | Your own `httpx.Client` or `httpx.AsyncClient`. Keyword only. |
+
+### Bring your own httpx client
+
+Pass `http_client` to use your own proxies, transports or connection limits. Use an `httpx.Client` with `Client` and an `httpx.AsyncClient` with `AsyncClient`. You keep ownership: closing the Caretly client doesn't close yours.
+
+```python
+import httpx
+import caretly
+
+http = httpx.Client(proxy="http://proxy.internal:8080")
+client = caretly.Client(http_client=http)
+```
+
+## Health check
+
+```python
+client.health()  # True when GET /health answers "ok"
+```
+
+`health` returns `False` for any other answer, and raises `APIConnectionError` when the server can't be reached.

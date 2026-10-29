@@ -1,0 +1,188 @@
+---
+title: "Client libraries"
+sidebarTitle: "Overview"
+description: "Official Caretly clients for Rust, Go, Python, Node.js, PHP, C# and Java. Render ZPL to PDF or PNG with typed errors and safe retries."
+---
+
+The official client libraries wrap the [`POST /render`](/quickstart) endpoint. They send your ZPL, retry rate-limited and overloaded requests without billing you twice, and give you the file together with the page count and labels billed.
+
+## Choose your language
+
+<CardGroup cols={2}>
+  <Card title="Rust" icon="rust" href="/clients/rust">
+    `cargo add caretly`
+  </Card>
+  <Card title="Go" icon="golang" href="/clients/go">
+    `go get github.com/jaapieaapie1/zpl/clients/go`
+  </Card>
+  <Card title="Python" icon="python" href="/clients/python">
+    `pip install caretly`
+  </Card>
+  <Card title="Node.js" icon="node-js" href="/clients/node">
+    `npm install @caretly/caretly`
+  </Card>
+  <Card title="PHP" icon="php" href="/clients/php">
+    `composer require caretly/caretly`
+  </Card>
+  <Card title="C# / .NET" icon="microsoft" href="/clients/csharp">
+    `dotnet add package Caretly`
+  </Card>
+  <Card title="Java" icon="java" href="/clients/java">
+    `dev.caretly:caretly:0.1.0`
+  </Card>
+</CardGroup>
+
+| Language | Package | Requirements |
+| --- | --- | --- |
+| Rust | [`caretly`](https://crates.io/crates/caretly) on crates.io | Rust 1.85+, tokio for the async client |
+| Go | [`github.com/jaapieaapie1/zpl/clients/go`](https://pkg.go.dev/github.com/jaapieaapie1/zpl/clients/go) | Go 1.22+, standard library only |
+| Python | [`caretly`](https://pypi.org/project/caretly/) on PyPI | Python 3.9+, `httpx` |
+| Node.js | [`@caretly/caretly`](https://www.npmjs.com/package/@caretly/caretly) on npm | Node.js 18+, Deno, Bun or any runtime with `fetch` |
+| PHP | [`caretly/caretly`](https://packagist.org/packages/caretly/caretly) on Packagist | PHP 8.1+, any PSR-18 HTTP client |
+| C# | [`Caretly`](https://www.nuget.org/packages/Caretly) on NuGet | .NET Standard 2.0 or .NET 8 |
+| Java | `dev.caretly:caretly` (coming to Maven Central) | Java 11+, no dependencies |
+
+The source of every client lives in [`clients/`](https://github.com/jaapieaapie1/zpl/tree/main/clients) on GitHub.
+
+## Render a label
+
+Every client renders a ZPL string to a PDF by default and saves it to a file:
+
+<CodeGroup>
+
+```rust Rust
+use caretly::Client;
+
+let client = Client::new()?; // reads CARETLY_API_KEY
+let pdf = client.render_pdf("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ").await?;
+pdf.save("label.pdf")?;
+```
+
+```go Go
+client := caretly.NewClient() // reads CARETLY_API_KEY
+res, err := client.Render(ctx, "^XA^FO50,50^A0N,50,50^FDHello^FS^XZ", nil)
+if err != nil {
+	log.Fatal(err)
+}
+if err := res.Save("label.pdf"); err != nil {
+	log.Fatal(err)
+}
+```
+
+```python Python
+import caretly
+
+client = caretly.Client()  # reads CARETLY_API_KEY
+result = client.render("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ")
+result.save("label.pdf")
+```
+
+```ts Node.js
+import { Caretly } from "@caretly/caretly";
+
+const caretly = new Caretly(); // reads CARETLY_API_KEY
+const pdf = await caretly.render("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ");
+await pdf.saveTo("label.pdf");
+```
+
+```php PHP
+use Caretly\Client;
+
+$caretly = new Client(); // reads CARETLY_API_KEY
+$result = $caretly->render('^XA^FO50,50^A0N,50,50^FDHello^FS^XZ');
+$result->saveTo('label.pdf');
+```
+
+```csharp C#
+using Caretly;
+
+using var client = new CaretlyClient(); // reads CARETLY_API_KEY
+var pdf = await client.RenderAsync("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ");
+await pdf.SaveToAsync("label.pdf");
+```
+
+```java Java
+import dev.caretly.CaretlyClient;
+import dev.caretly.RenderResult;
+import java.nio.file.Path;
+
+CaretlyClient client = CaretlyClient.create(); // reads CARETLY_API_KEY
+RenderResult pdf = client.render("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ");
+pdf.saveTo(Path.of("label.pdf"));
+```
+
+</CodeGroup>
+
+## Shared behaviour
+
+All seven clients work the same way. Only the naming follows each language's conventions.
+
+### API key and base URL
+
+- Pass the API key to the constructor, or set the `CARETLY_API_KEY` environment variable. The clients send it as `Authorization: Bearer <key>`. See [Authentication](/authentication) for test and live keys.
+- The key is optional. A self-hosted server that runs without keys doesn't need one.
+- The base URL defaults to `https://caretly.dev`. Change it to point a client at a self-hosted server.
+
+```bash
+export CARETLY_API_KEY="zpl_test_..."
+```
+
+### Render one document or several files
+
+- `render` sends one ZPL document as the raw request body. It can hold several `^XA…^XZ` labels, and each becomes a page.
+- `renderFiles` sends several files as `multipart/form-data`. Each file starts from a fresh printer state, and pages follow the order of the files. See [Render many labels](/multiple-labels).
+
+Most clients also have `renderPdf` and `renderPng` shorthands, and a `health` call for `GET /health`.
+
+### Render options
+
+| Option | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `format` | `pdf`, `png` | `pdf` | A PDF holds every page. A PNG is one page. |
+| `page` | 1 or more | 1 | The page to render as PNG, counted across all files. |
+| `dpmm` | 6, 8, 12, 24 | 8 | Printer resolution in dots per millimetre (152, 203, 300 or 600 dpi). |
+| `timings` | boolean | off | Ask for a `Server-Timing` header with per-stage timings. |
+| `idempotencyKey` | string, up to 255 characters | generated | A retry with the same key and content is billed once. |
+| `compress` | boolean | off | Gzip the request body. Useful for large batches with embedded graphics. |
+
+The clients leave unset options out of the request, so the server defaults apply. They check `page`, `dpmm` and the idempotency key before sending, and fail without making a request when a value is invalid.
+
+### Result
+
+A successful render returns the file and the metadata from the response headers:
+
+| Field | Header | Meaning |
+| --- | --- | --- |
+| bytes | body | The PDF or PNG. Every client has a method to save it to a file. |
+| content type | `Content-Type` | `application/pdf` or `image/png`. |
+| page count | `X-Page-Count` | Total pages across the input. |
+| file page counts | `X-File-Page-Counts` | Pages per file for `renderFiles`. Empty otherwise. |
+| labels billed | `X-Labels-Billed` | Labels billed for this request. `0` for a test key, empty when the server runs without keys. |
+| rate limit | `RateLimit-Limit`, `RateLimit-Remaining` | The key's burst size and how much of it is left. |
+| server timing | `Server-Timing` | The raw header, when you set `timings`. |
+
+### Errors
+
+Each error status has its own error type, so you can handle an invalid label differently from an expired key:
+
+| Status | Meaning | Retried |
+| --- | --- | --- |
+| `400` | The ZPL failed to parse, a parameter is invalid, or the page is out of range. | No |
+| `401` | The API key is missing, invalid, expired or revoked. | No |
+| `402` | Billing is inactive, so live keys are paused. Test keys keep working. | No |
+| `413` | The body is over 100 MiB after decompression. | No |
+| `415` | The server doesn't support the `Content-Encoding`. | No |
+| `429` | Too many requests for this key. | Yes |
+| `503` | The renderer is busy. The request isn't billed. | Yes |
+
+Every API error carries the status code, the server's plain-text message and the `Retry-After` delay. Other statuses, such as `500`, raise a generic API error. Network failures and timeouts have their own types.
+
+### Retries and idempotency
+
+- The clients retry `429` and `503` responses and connection errors, 2 times by default. Set the maximum retries to `0` to turn retries off.
+- They wait the number of seconds in `Retry-After` when the server sends it. Otherwise they back off 0.5 s, 1 s, 2 s, 4 s, up to 8 s.
+- When retries are on and you don't set an idempotency key, the client generates a UUID per call and sends it on every attempt. A retried request is never billed twice.
+- Timeouts aren't retried. The server may still be rendering the request, so the client raises a timeout error on the first one. Pass your own idempotency key, such as an order number, to retry it safely yourself.
+- Other error statuses aren't retried.
+
+See [Safe retries with Idempotency-Key](/authentication#safe-retries-with-idempotency-key) and [Rate limits](/authentication#rate-limits).

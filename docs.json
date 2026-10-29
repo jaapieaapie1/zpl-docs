@@ -21,6 +21,19 @@
         ]
       },
       {
+        "group": "Client libraries",
+        "pages": [
+          "clients/overview",
+          "clients/rust",
+          "clients/go",
+          "clients/python",
+          "clients/node",
+          "clients/php",
+          "clients/csharp",
+          "clients/java"
+        ]
+      },
+      {
         "group": "Console API",
         "openapi": "console-openapi.json",
         "pages": [

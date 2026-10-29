@@ -1,0 +1,229 @@
+---
+title: "Java client"
+sidebarTitle: "Java"
+description: "Render ZPL labels to PDF or PNG from Java 11+ with dev.caretly:caretly. Blocking and CompletableFuture calls, typed exceptions and safe retries."
+icon: "java"
+---
+
+<Note>
+  The Java client is coming to Maven Central soon. Until then, build it from [source](https://github.com/jaapieaapie1/zpl/tree/main/clients/java) and install it to your local Maven repository with `./gradlew publishToMavenLocal`.
+</Note>
+
+The Java client uses `java.net.http.HttpClient` and has no runtime dependencies. Every call has a blocking form and an async form that returns a `CompletableFuture`.
+
+- Package: `dev.caretly:caretly`
+- Source: [`clients/java`](https://github.com/jaapieaapie1/zpl/tree/main/clients/java)
+
+## Install
+
+The client needs Java 11 or newer.
+
+<CodeGroup>
+
+```kotlin Gradle (Kotlin)
+dependencies {
+    implementation("dev.caretly:caretly:0.1.0")
+}
+```
+
+```xml Maven
+<dependency>
+  <groupId>dev.caretly</groupId>
+  <artifactId>caretly</artifactId>
+  <version>0.1.0</version>
+</dependency>
+```
+
+</CodeGroup>
+
+The jar is the named module `dev.caretly`. With the module system, add `requires dev.caretly;` to your `module-info.java`.
+
+## Quickstart
+
+Create a test key in the [console](https://caretly.dev/console) and set it in your environment:
+
+```bash
+export CARETLY_API_KEY="zpl_test_..."
+```
+
+Render a label to PDF and save it:
+
+```java
+import dev.caretly.CaretlyClient;
+import dev.caretly.RenderResult;
+import java.nio.file.Path;
+
+public class Main {
+    public static void main(String[] args) {
+        CaretlyClient client = CaretlyClient.create(); // reads CARETLY_API_KEY
+
+        RenderResult pdf = client.render("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ");
+        pdf.saveTo(Path.of("label.pdf"));
+        System.out.println(pdf.pageCount() + " page(s)");
+    }
+}
+```
+
+Create one client and share it. It's thread safe.
+
+## Sync and async
+
+Every call has an `...Async` form that returns a `CompletableFuture`:
+
+```java
+client.renderAsync(zpl, RenderOptions.defaults())
+        .thenAccept(result -> result.saveTo(Path.of("label.pdf")));
+
+client.renderFilesAsync(files, options);
+client.healthAsync();
+```
+
+Async calls complete exceptionally with the same exceptions as the blocking calls. When you call `join()`, they're wrapped in a `CompletionException`.
+
+## Render a page as PNG
+
+A PNG holds one page. Choose it with `page`, starting at 1:
+
+```java
+import dev.caretly.Format;
+import dev.caretly.RenderOptions;
+
+RenderResult png = client.render(zpl, RenderOptions.builder()
+        .format(Format.PNG)
+        .page(2)
+        .dpmm(12) // 300 dpi
+        .build());
+png.saveTo(Path.of("page-2.png"));
+
+// Shorthand for format and page:
+RenderResult page2 = client.renderPng(zpl, 2);
+```
+
+`client.renderPdf(zpl)` is the matching shorthand for a PDF, and `client.renderPng(zpl)` renders the first page.
+
+## Render several files
+
+`renderFiles` sends the files as `multipart/form-data`. Each file starts from a fresh printer state, and pages follow the order of the list:
+
+```java
+import dev.caretly.ZplFile;
+import java.util.List;
+
+RenderResult result = client.renderFiles(List.of(
+        ZplFile.of("order-1.zpl", order1Zpl),
+        ZplFile.fromPath(Path.of("order-2.zpl"))));
+System.out.println(result.filePageCounts()); // [2, 1]
+```
+
+`ZplFile.of` takes the ZPL as a `String` or `byte[]`.
+
+## Render options
+
+Build options with `RenderOptions.builder()`:
+
+| Method | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `format(Format)` | `Format.PDF`, `Format.PNG` | PDF | A PDF holds every page. A PNG is one page. |
+| `page(int)` | 1 or more | 1 | The page shown in a PNG. |
+| `dpmm(int)` | 6, 8, 12, 24 | 8 | Printer resolution in dots per millimetre. |
+| `timings(boolean)` | | `false` | Ask for a `Server-Timing` header. |
+| `idempotencyKey(String)` | up to 255 characters | generated | A retry with the same key and content is billed once. |
+| `compress(boolean)` | | `false` | Gzip the request body. |
+
+Options you leave unset aren't sent, so the server defaults apply. An invalid `page` or `dpmm` throws `IllegalArgumentException`. `RenderOptions.defaults()` uses every server default.
+
+## Read the result
+
+| Method | Returns | Meaning |
+| --- | --- | --- |
+| `bytes()` | `byte[]` | The PDF or PNG. |
+| `contentType()` | `String` | `application/pdf` or `image/png`. |
+| `pageCount()` | `int` | Total pages across the input. |
+| `filePageCounts()` | `List<Integer>` | Pages per file for `renderFiles`. Empty otherwise. |
+| `labelsBilled()` | `OptionalInt` | Labels billed. `0` for a test key, empty without keys. |
+| `rateLimit()` | `Optional<RateLimit>` | `limit()` (burst size) and `remaining()`. |
+| `serverTiming()` | `Optional<String>` | The raw `Server-Timing` header, with `timings`. |
+| `saveTo(Path)` | `Path` | Writes the file. |
+
+```java
+System.out.println(result.pageCount() + " page(s)");
+result.labelsBilled().ifPresent(n -> System.out.println(n + " billed"));
+result.rateLimit().ifPresent(rate ->
+        System.out.println(rate.remaining() + " of " + rate.limit() + " requests left"));
+```
+
+## Handle errors
+
+All exceptions are unchecked and extend `CaretlyException`:
+
+| Exception | When |
+| --- | --- |
+| `BadRequestException` | `400`: ZPL parse error, invalid parameter, page out of range. |
+| `AuthenticationException` | `401`: key missing, invalid, expired or revoked. |
+| `PaymentRequiredException` | `402`: billing inactive, live keys paused. |
+| `PayloadTooLargeException` | `413`: body over 100 MiB after decompression. |
+| `UnsupportedContentEncodingException` | `415`: unsupported `Content-Encoding`. |
+| `RateLimitedException` | `429`, after retries ran out. |
+| `OverloadedException` | `503`, after retries ran out. Not billed. |
+| `ApiException` | Base of the above, and any other status, such as `5xx`. |
+| `ConnectionException` | The server couldn't be reached. |
+| `RequestTimeoutException` | No response within the timeout. |
+
+`ApiException` has `statusCode()`, `getMessage()` (the response body) and `retryAfter()` (`Optional<Duration>`).
+
+```java
+import dev.caretly.ApiException;
+import dev.caretly.AuthenticationException;
+import dev.caretly.BadRequestException;
+
+try {
+    client.render(zpl);
+} catch (BadRequestException e) {
+    System.err.println("Invalid ZPL: " + e.getMessage());
+} catch (AuthenticationException e) {
+    System.err.println("Check your API key");
+} catch (ApiException e) {
+    System.err.println("HTTP " + e.statusCode() + ": " + e.getMessage());
+}
+```
+
+## Retries and idempotency
+
+The client retries `429`, `503` and connection failures up to `maxRetries` times, 2 by default. It waits `Retry-After` when the server sends it. Otherwise it backs off 0.5 s, 1 s, 2 s, up to 8 s. Timeouts and other statuses aren't retried.
+
+When retries are on and you don't set an `idempotencyKey`, the client generates a UUID per call, so a retried render is never billed twice. Set your own key, such as an order number, to make retries across calls or processes safe too:
+
+```java
+RenderResult pdf = client.render(zpl, RenderOptions.builder()
+        .idempotencyKey("order-10042")
+        .build());
+```
+
+## Configuration
+
+Configure the client with the builder:
+
+```java
+import java.net.InetSocketAddress;
+import java.net.ProxySelector;
+import java.net.http.HttpClient;
+import java.time.Duration;
+
+CaretlyClient client = CaretlyClient.builder()
+        .apiKey("zpl_live_...")                 // default: CARETLY_API_KEY, else no key
+        .baseUrl("http://localhost:3000")       // default: https://caretly.dev
+        .timeout(Duration.ofSeconds(10))        // per attempt, default 30 s
+        .maxRetries(3)                          // default 2, 0 turns retries off
+        .httpClient(HttpClient.newBuilder()     // optional: proxy, executor, TLS
+                .proxy(ProxySelector.of(new InetSocketAddress("proxy.internal", 8080)))
+                .build())
+        .build();
+```
+
+`baseUrl` also accepts a `URI`. Pass your own `java.net.http.HttpClient` to set a proxy, an executor or TLS settings.
+
+## Health check
+
+```java
+boolean up = client.health(); // true when GET /health answers "ok"
+```

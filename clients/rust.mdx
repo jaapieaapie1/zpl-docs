@@ -1,0 +1,225 @@
+---
+title: "Rust client"
+sidebarTitle: "Rust"
+description: "Render ZPL labels to PDF or PNG from Rust with the caretly crate. Async for tokio or blocking, with typed errors and safe retries."
+icon: "rust"
+---
+
+The `caretly` crate has an async client for tokio and a blocking client. Both share the same options, result and error types.
+
+- Package: [`caretly` on crates.io](https://crates.io/crates/caretly)
+- API reference: [docs.rs/caretly](https://docs.rs/caretly)
+- Source: [`clients/rust`](https://github.com/jaapieaapie1/zpl/tree/main/clients/rust)
+
+## Install
+
+```bash
+cargo add caretly
+```
+
+The async examples on this page also need tokio with a runtime and the `main` macro:
+
+```bash
+cargo add tokio --features macros,rt-multi-thread
+```
+
+The crate needs Rust 1.85 or newer.
+
+### Feature flags
+
+| Feature | Default | What it adds |
+| --- | --- | --- |
+| `async` | Yes | `caretly::Client`, the async client for tokio. |
+| `rustls-tls` | Yes | HTTPS through rustls. |
+| `blocking` | No | `caretly::blocking::Client`. Needs no async runtime. |
+| `native-tls` | No | HTTPS through the platform's TLS library instead of rustls. |
+| `gzip` | No | The `compress` render option. |
+
+To use only the blocking client, without tokio in your dependency tree:
+
+```toml Cargo.toml
+[dependencies]
+caretly = { version = "0.1", default-features = false, features = ["blocking", "rustls-tls"] }
+```
+
+Keep `rustls-tls` or `native-tls` on to reach `https://` URLs. Without either, only `http://` works, for example a self-hosted server on localhost.
+
+## Quickstart
+
+Create a test key in the [console](https://caretly.dev/console) and set it in your environment:
+
+```bash
+export CARETLY_API_KEY="zpl_test_..."
+```
+
+Render a label to PDF and save it:
+
+```rust
+use caretly::Client;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::new()?; // reads CARETLY_API_KEY
+
+    let pdf = client.render_pdf("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ").await?;
+    pdf.save("label.pdf")?;
+    println!("{} page(s)", pdf.page_count);
+    Ok(())
+}
+```
+
+`render` and `render_pdf` accept a `&str`, `String`, `&[u8]` or `Vec<u8>`.
+
+## Async and blocking
+
+`caretly::Client` is async and runs on tokio. With the `blocking` feature, `caretly::blocking::Client` has the same methods without `.await`:
+
+```rust
+use caretly::blocking::Client;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::builder().api_key("zpl_test_...").build()?;
+    let pdf = client.render_pdf("^XA^FO50,50^A0N,50,50^FDHello^FS^XZ")?;
+    pdf.save("label.pdf")?;
+    Ok(())
+}
+```
+
+<Warning>
+  Don't call the blocking client from inside an async runtime. Use the async client there.
+</Warning>
+
+## Render a page as PNG
+
+A PNG holds one page. Choose it with `page`, starting at 1:
+
+```rust
+use caretly::{Dpmm, Format, RenderOptions};
+
+let options = RenderOptions::new().format(Format::Png).page(2).dpmm(Dpmm::D12);
+let png = client.render(zpl, options).await?;
+png.save("page-2.png")?;
+
+// Shorthand for format and page:
+let png = client.render_png(zpl, 2).await?;
+```
+
+## Render several files
+
+`render_files` sends the files as `multipart/form-data`. Each file starts from a fresh printer state, and pages follow the order of the files:
+
+```rust
+let result = client
+    .render_files(
+        [("order-1.zpl", zpl_1), ("order-2.zpl", zpl_2)],
+        Default::default(),
+    )
+    .await?;
+println!("pages per file: {:?}", result.file_page_counts); // [2, 1]
+```
+
+Pass any iterator of `(name, content)` pairs. File contents can be `&str`, `String`, `&[u8]` or `Vec<u8>`.
+
+## Render options
+
+Build options with `RenderOptions::new()`, or pass `Default::default()` for the server defaults:
+
+| Method | Request | Meaning |
+| --- | --- | --- |
+| `format(Format::Pdf)`, `format(Format::Png)` | `format` | Output format. Default PDF with every page. |
+| `page(n)` | `page` | For PNG, the page to render, from 1. |
+| `dpmm(Dpmm::D6)`, `D8`, `D12`, `D24` | `dpmm` | Resolution in dots per millimetre. Default 8. |
+| `timings(true)` | `timings=1` | Ask for a `Server-Timing` header. |
+| `idempotency_key("order-1234")` | `Idempotency-Key` | A retry with the same key and content is billed once. Max 255 characters. |
+| `compress(true)` | `Content-Encoding: gzip` | Gzip the request body. Needs the `gzip` feature. |
+
+Unset options aren't sent, so the server defaults apply. `Dpmm::try_from(n)` converts a number and fails on anything other than 6, 8, 12 or 24.
+
+`page(0)`, an empty or too long idempotency key, and an empty file list fail with `Error::InvalidArgument` before anything is sent.
+
+## Read the result
+
+`RenderResult` has public fields:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `bytes` | `Vec<u8>` | The PDF or PNG. `save(path)` writes it to a file, `into_bytes()` takes it. |
+| `content_type` | `String` | `application/pdf` or `image/png`. |
+| `page_count` | `u32` | Total pages across the input. |
+| `file_page_counts` | `Vec<u32>` | Pages per file for `render_files`. Empty otherwise. |
+| `labels_billed` | `Option<u32>` | Labels billed. `Some(0)` for a test key, `None` without keys. |
+| `rate_limit` | `Option<RateLimit>` | `limit` (burst size) and `remaining`. |
+| `server_timing` | `Option<String>` | The raw `Server-Timing` header, with `timings(true)`. |
+
+```rust
+let result = client.render_pdf(zpl).await?;
+println!("{} page(s), {:?} billed", result.page_count, result.labels_billed);
+if let Some(rate) = result.rate_limit {
+    println!("{} of {} requests left", rate.remaining, rate.limit);
+}
+```
+
+## Handle errors
+
+Every call returns `Result<_, caretly::Error>`:
+
+| Variant | Cause |
+| --- | --- |
+| `BadRequest` | `400`: ZPL parse error, invalid parameter, page out of range. |
+| `Authentication` | `401`: key missing, invalid, expired or revoked. |
+| `PaymentRequired` | `402`: billing inactive, live keys paused. |
+| `PayloadTooLarge` | `413`: body over 100 MiB after decompression. |
+| `UnsupportedEncoding` | `415`: unsupported `Content-Encoding`. |
+| `RateLimited` | `429`: too many requests, after retries ran out. |
+| `Overloaded` | `503`: server busy, not billed, after retries ran out. |
+| `Api` | Any other status, including other `5xx`. |
+| `Connection` | Network failure, after retries ran out. |
+| `Timeout` | The timeout elapsed. Not retried. |
+| `InvalidArgument` | Client-side validation failed. Nothing was sent. |
+
+The API variants hold an `ApiError` with `status`, `message` (the response body) and `retry_after`. Use `Error::status()`, `Error::retry_after()` and `Error::api_error()` to read them without matching.
+
+```rust
+match client.render_pdf("^XA^FO50,50^FDoops").await {
+    Ok(pdf) => println!("{} bytes", pdf.bytes.len()),
+    Err(caretly::Error::BadRequest(e)) => eprintln!("invalid ZPL: {}", e.message),
+    Err(caretly::Error::Authentication(_)) => eprintln!("check your API key"),
+    Err(e) => eprintln!("render failed: {e}"),
+}
+```
+
+## Retries and idempotency
+
+The client retries a `429`, a `503` or a connection error up to `max_retries` times, 2 by default. It waits `Retry-After` seconds when the server sends it. Otherwise it backs off 0.5 s, 1 s, 2 s, 4 s, then 8 s. Timeouts and other statuses aren't retried.
+
+When retries are on and you don't set an idempotency key, the client generates a UUID v4 per call and sends it on every attempt, so a retried request is never billed twice.
+
+Set your own key, such as an order number, to make retries across calls or processes safe too:
+
+```rust
+let options = RenderOptions::new().idempotency_key("order-10042");
+let pdf = client.render(zpl, options).await?;
+```
+
+## Configuration
+
+```rust
+use std::time::Duration;
+
+let client = caretly::Client::builder()
+    .api_key("zpl_live_...")           // default: CARETLY_API_KEY
+    .base_url("http://localhost:3000") // default: https://caretly.dev
+    .timeout(Duration::from_secs(10))  // per attempt, default: 30 s
+    .max_retries(3)                    // default: 2, 0 turns retries off
+    .build()?;
+```
+
+The blocking `ClientBuilder` has the same methods. An empty API key sends no `Authorization` header, for self-hosted servers without keys.
+
+The client builds its own `reqwest` client, so you can't inject one. Choose the TLS backend with the `rustls-tls` and `native-tls` features.
+
+## Health check
+
+```rust
+let up = client.health().await?; // true when GET /health answers "ok"
+```

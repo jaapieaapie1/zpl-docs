@@ -9,10 +9,10 @@ Caretly exposes a single HTTP endpoint at `https://caretly.dev/render`. Send you
 
 ## Get an API key
 
-Every request needs an API key. Create one on the **API keys** page of the [console](https://caretly.dev/console). Start with a test key: it's free, and stamps **TEST** on every label. Then store the key in the `ZPL_API_KEY` environment variable:
+Every request needs an API key. Create one on the **API keys** page of the [console](https://caretly.dev/console). Start with a test key: it's free, and stamps **TEST** on every label. Then store the key in the `CARETLY_API_KEY` environment variable:
 
 ```bash
-export ZPL_API_KEY="zpl_test_..."
+export CARETLY_API_KEY="zpl_test_..."
 ```
 
 See [Authentication](/authentication) for live keys, billing and errors.
@@ -23,7 +23,7 @@ Click **Try it** to render the example shipping label directly from this page. P
 
 ```bash
 curl -X POST "https://caretly.dev/render?format=pdf" \
-  -H "Authorization: Bearer $ZPL_API_KEY" \
+  -H "Authorization: Bearer $CARETLY_API_KEY" \
   -H "Content-Type: text/plain" \
   --data-binary @label.zpl \
   -o label.pdf
@@ -32,6 +32,8 @@ curl -X POST "https://caretly.dev/render?format=pdf" \
 <Tip>
   Use `--data-binary` instead of `-d` so curl keeps the newlines in your ZPL intact.
 </Tip>
+
+Prefer a library over raw HTTP? The [client libraries](/clients/overview) for Rust, Go, Python, Node.js, PHP, C# and Java handle retries, idempotency and errors for you.
 
 <Note>
   Just trying ZPL? The [playground](https://caretly.dev/playground) renders in your browser without a key. It's free, but stamps **PREVIEW** on every label and PDF.

@@ -1,0 +1,217 @@
+---
+title: "PHP client"
+sidebarTitle: "PHP"
+description: "Render ZPL labels to PDF or PNG from PHP with caretly/caretly. Works with any PSR-18 HTTP client, with typed exceptions and safe retries."
+icon: "php"
+---
+
+The `caretly/caretly` package works with any [PSR-18](https://www.php-fig.org/psr/psr-18/) HTTP client, such as Guzzle or Symfony HttpClient, and finds an installed one automatically.
+
+- Package: [`caretly/caretly` on Packagist](https://packagist.org/packages/caretly/caretly)
+- Source: [`clients/php`](https://github.com/jaapieaapie1/zpl/tree/main/clients/php)
+
+## Install
+
+```bash
+composer require caretly/caretly
+```
+
+The package needs PHP 8.1 or newer, and a PSR-18 client. If your project doesn't have one yet, add Guzzle or Symfony HttpClient:
+
+```bash
+composer require guzzlehttp/guzzle
+# or
+composer require symfony/http-client nyholm/psr7
+```
+
+## Quickstart
+
+Create a test key in the [console](https://caretly.dev/console) and set it in your environment:
+
+```bash
+export CARETLY_API_KEY="zpl_test_..."
+```
+
+Render a label to PDF and save it:
+
+```php
+use Caretly\Client;
+
+$caretly = new Client(); // reads CARETLY_API_KEY
+
+$result = $caretly->render('^XA^FO50,50^A0N,50,50^FDHello^FS^XZ');
+$result->saveTo('label.pdf');
+
+echo $result->pageCount;    // 1
+echo $result->labelsBilled; // 0 for a test key
+```
+
+<Tip>
+  Use single quotes or a nowdoc for ZPL in PHP. In double quotes, PHP reads `$` as the start of a variable.
+</Tip>
+
+## Choose a PSR-18 client
+
+When you don't pass `httpClient`, the client creates a Guzzle or Symfony client itself, whichever is installed, and applies `timeout` to it. If neither is installed, it falls back to [`php-http/discovery`](https://github.com/php-http/discovery) to find another PSR-18 client.
+
+To use a client you already configured, pass it with its PSR-17 factories:
+
+```php
+use Caretly\Client;
+use GuzzleHttp\Client as Guzzle;
+use GuzzleHttp\Psr7\HttpFactory;
+
+$factory = new HttpFactory();
+
+$caretly = new Client(
+    apiKey: 'zpl_live_...',
+    httpClient: new Guzzle(['timeout' => 30, 'proxy' => 'http://proxy.internal:8080']),
+    requestFactory: $factory,
+    streamFactory: $factory,
+);
+```
+
+PSR-18 has no standard way to set a timeout. When you inject your own client, set its timeout there: the `timeout` argument only applies to a client that Caretly creates.
+
+## Render a page as PNG
+
+A PNG holds one page. Choose it with `page`, starting at 1:
+
+```php
+use Caretly\Format;
+use Caretly\RenderOptions;
+
+$png = $caretly->render($zpl, new RenderOptions(format: Format::Png, page: 2, dpmm: 12));
+$png->saveTo('page-2.png');
+
+// Shorthand for format and page:
+$png = $caretly->renderPng($zpl, page: 2);
+```
+
+`$caretly->renderPdf($zpl)` is the matching shorthand for a PDF. Both shorthands also take `dpmm`.
+
+## Render several files
+
+`renderFiles` sends the files as `multipart/form-data`. Pass an array of file name to ZPL. Each file starts from a fresh printer state, and pages follow the order of the array:
+
+```php
+$result = $caretly->renderFiles([
+    'order-1.zpl' => file_get_contents('order-1.zpl'),
+    'order-2.zpl' => file_get_contents('order-2.zpl'),
+]);
+
+$result->filePageCounts; // [2, 1]
+```
+
+## Render options
+
+Pass a `Caretly\RenderOptions` with named arguments:
+
+| Argument | Values | Default (server) | Meaning |
+| --- | --- | --- | --- |
+| `format` | `Format::Pdf`, `Format::Png` | PDF | A PDF holds every page. A PNG is one page. |
+| `page` | int, 1 or more | 1 | The page shown in a PNG. |
+| `dpmm` | 6, 8, 12, 24 | 8 | Printer resolution in dots per millimetre. |
+| `timings` | bool | `false` | Return a `Server-Timing` header in `$result->serverTiming`. |
+| `idempotencyKey` | string, 1 to 255 characters | generated | A retry with the same key and content is billed once. |
+| `compress` | bool | `false` | Gzip the request body. Needs `ext-zlib`. |
+
+An invalid `page`, `dpmm` or `idempotencyKey` throws `\InvalidArgumentException` before any request.
+
+## Read the result
+
+`RenderResult` has read-only properties:
+
+| Property | Type | Meaning |
+| --- | --- | --- |
+| `content` | `string` | The PDF or PNG bytes. `saveTo($path)` writes them to a file. |
+| `contentType` | `string` | `application/pdf` or `image/png`. |
+| `pageCount` | `int` | Total pages across the input. |
+| `filePageCounts` | `list<int>` | Pages per file for `renderFiles()`. Empty otherwise. |
+| `labelsBilled` | `?int` | Labels billed. `0` for a test key, `null` without keys. |
+| `rateLimit` | `?RateLimit` | `limit` (burst size) and `remaining`. `null` when absent. |
+| `serverTiming` | `?string` | The raw `Server-Timing` header, with `timings`. |
+
+```php
+echo "{$result->pageCount} page(s), {$result->labelsBilled} billed\n";
+if ($result->rateLimit !== null) {
+    echo "{$result->rateLimit->remaining} of {$result->rateLimit->limit} requests left\n";
+}
+```
+
+## Handle errors
+
+Every runtime exception extends `Caretly\Exception\CaretlyException`. The classes live in the `Caretly\Exception` namespace:
+
+| Exception | Status | When |
+| --- | --- | --- |
+| `BadRequestException` | `400` | ZPL parse error, invalid parameter, page out of range. |
+| `AuthenticationException` | `401` | API key missing, invalid, expired or revoked. |
+| `PaymentRequiredException` | `402` | Billing inactive, live keys paused. |
+| `PayloadTooLargeException` | `413` | Body over 100 MiB after decompression. |
+| `UnsupportedEncodingException` | `415` | Unsupported `Content-Encoding`. |
+| `RateLimitedException` | `429` | Too many requests, after retries ran out. |
+| `OverloadedException` | `503` | Server busy, not billed, after retries ran out. |
+| `ApiException` | Other | Base of the above, and any other error status. |
+| `TransportException` | | No response: connection or DNS failure. |
+| `TimeoutException` | | The request timed out. Extends `TransportException`. |
+
+`ApiException` has `status`, `retryAfter` (seconds or `null`) and the response body as its message.
+
+```php
+use Caretly\Exception\ApiException;
+use Caretly\Exception\AuthenticationException;
+use Caretly\Exception\BadRequestException;
+
+try {
+    $caretly->render($zpl);
+} catch (BadRequestException $e) {
+    echo "Invalid ZPL: {$e->getMessage()}";
+} catch (AuthenticationException) {
+    echo 'Check your API key';
+} catch (ApiException $e) {
+    echo "Caretly answered {$e->status}: {$e->getMessage()}";
+}
+```
+
+## Retries and idempotency
+
+The client retries `429` and `503` responses and connection errors up to `maxRetries` times, 2 by default. It waits `Retry-After` seconds when the server sends it. Otherwise it backs off 0.5 s, 1 s, 2 s, up to 8 s. Other statuses aren't retried.
+
+Timeouts aren't retried either: the client throws `TimeoutException` on the first one, because the server may still be rendering.
+
+Unless you pass `idempotencyKey`, the client generates a UUID per call and sends it on every attempt, so a retried render is never billed twice. With `maxRetries: 0`, it generates no key. Set your own key, such as an order number, to make retries across calls or processes safe too:
+
+```php
+$result = $caretly->render($zpl, new RenderOptions(idempotencyKey: 'order-10042'));
+```
+
+## Configuration
+
+```php
+$caretly = new Client(
+    apiKey: 'zpl_live_...',            // default: getenv('CARETLY_API_KEY')
+    baseUrl: 'http://localhost:3000',  // default: https://caretly.dev
+    maxRetries: 3,                     // default: 2, 0 turns retries off
+    timeout: 10.0,                     // seconds, default 30; only for a client Caretly creates
+);
+```
+
+| Argument | Default | Meaning |
+| --- | --- | --- |
+| `apiKey` | `CARETLY_API_KEY` | Sent as `Authorization: Bearer`. Optional for self-hosted servers. |
+| `baseUrl` | `https://caretly.dev` | Point at a self-hosted server. |
+| `maxRetries` | `2` | Retries for `429`, `503` and connection errors. |
+| `timeout` | `30.0` | Seconds. Applies when Caretly creates the HTTP client itself. |
+| `httpClient` | discovered | Any `Psr\Http\Client\ClientInterface`. |
+| `requestFactory` | discovered | A `Psr\Http\Message\RequestFactoryInterface`. |
+| `streamFactory` | discovered | A `Psr\Http\Message\StreamFactoryInterface`. |
+| `sleep` | `usleep` | `Closure(float $seconds): void`, called between retries. Replace it in tests. |
+
+## Health check
+
+```php
+$caretly->health(); // true when GET /health answers "ok"
+```
+
+`health` returns `false` for any other answer and never throws.

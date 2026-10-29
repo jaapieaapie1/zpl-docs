@@ -1,0 +1,218 @@
+---
+title: "Go client"
+sidebarTitle: "Go"
+description: "Render ZPL labels to PDF or PNG from Go. Standard library only, with context support, typed errors and safe retries."
+icon: "golang"
+---
+
+The Go client uses only the standard library. Every method takes a `context.Context`, and errors work with `errors.Is` and `errors.As`.
+
+- Package: [`github.com/jaapieaapie1/zpl/clients/go` on pkg.go.dev](https://pkg.go.dev/github.com/jaapieaapie1/zpl/clients/go)
+- Source: [`clients/go`](https://github.com/jaapieaapie1/zpl/tree/main/clients/go)
+
+## Install
+
+```bash
+go get github.com/jaapieaapie1/zpl/clients/go@latest
+```
+
+The package name is `caretly`. Import it with an explicit name so the path reads clearly:
+
+```go
+import caretly "github.com/jaapieaapie1/zpl/clients/go"
+```
+
+The client needs Go 1.22 or newer.
+
+## Quickstart
+
+Create a test key in the [console](https://caretly.dev/console) and set it in your environment:
+
+```bash
+export CARETLY_API_KEY="zpl_test_..."
+```
+
+Render a label to PDF and save it:
+
+```go
+package main
+
+import (
+	"context"
+	"log"
+
+	caretly "github.com/jaapieaapie1/zpl/clients/go"
+)
+
+func main() {
+	client := caretly.NewClient() // reads CARETLY_API_KEY
+
+	res, err := client.Render(context.Background(), "^XA^FO50,50^A0N,50,50^FDHello^FS^XZ", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := res.Save("label.pdf"); err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%d page(s), %s", res.PageCount, res.ContentType)
+}
+```
+
+Pass `nil` options to use the server defaults: a PDF at 8 dots per millimetre.
+
+## Use a context
+
+The context covers the whole call, including the waits between retries. Use it to set a deadline or cancel a render:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+
+res, err := client.Render(ctx, zpl, nil)
+```
+
+When the context is cancelled or its deadline passes, the call returns the context's error, such as `context.DeadlineExceeded`. The client's own timeout, set with `WithTimeout`, limits each attempt separately.
+
+## Render a page as PNG
+
+A PNG holds one page. Choose it with `Page`, starting at 1:
+
+```go
+res, err := client.Render(ctx, zpl, &caretly.RenderOptions{
+	Format: caretly.FormatPNG,
+	Page:   2,
+	DPMM:   12, // 300 dpi
+})
+
+// Shorthand for format and page:
+res, err = client.RenderPNG(ctx, zpl, 2)
+```
+
+`client.RenderPDF(ctx, zpl)` is the matching shorthand for a PDF.
+
+## Render several files
+
+`RenderFiles` sends the files as `multipart/form-data`. Each file starts from a fresh printer state, and pages follow the order of the files:
+
+```go
+res, err := client.RenderFiles(ctx, []caretly.File{
+	{Name: "order-1.zpl", Content: []byte(zpl1)},
+	{Name: "order-2.zpl", Content: zpl2Bytes},
+}, nil)
+if err != nil {
+	log.Fatal(err)
+}
+log.Println(res.FilePageCounts) // [2 1]
+```
+
+## Render options
+
+`RenderOptions` fields left at their zero value aren't sent, so the server defaults apply:
+
+| Field | Values | Default | Meaning |
+| --- | --- | --- | --- |
+| `Format` | `FormatPDF`, `FormatPNG` | PDF | A PDF holds every page. A PNG is one page. |
+| `Page` | 1 or more | 1 | The page shown in a PNG, counted across all files. |
+| `DPMM` | 6, 8, 12, 24 | 8 | Printer resolution in dots per millimetre. |
+| `Timings` | `bool` | `false` | Ask for a `Server-Timing` header. |
+| `IdempotencyKey` | string, max 255 characters | generated | A retry with the same key and content is billed once. |
+| `Compress` | `bool` | `false` | Gzip the request body. |
+
+Invalid values fail before any request with an error that matches `caretly.ErrInvalidOptions`. An empty file list does too.
+
+## Read the result
+
+`*RenderResult` has these fields:
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `Content` | `[]byte` | The PDF or PNG. `Save(path)` writes it to a file. |
+| `ContentType` | `string` | `application/pdf` or `image/png`. |
+| `PageCount` | `int` | Total pages across the input. |
+| `FilePageCounts` | `[]int` | Pages per file for `RenderFiles`. Empty otherwise. |
+| `LabelsBilled` | `*int` | Labels billed. `0` for a test key, `nil` without keys. |
+| `RateLimit` | `*RateLimit` | `Limit` (burst size) and `Remaining`. `nil` when absent. |
+| `ServerTiming` | `string` | The raw `Server-Timing` header with `Timings`. Empty otherwise. |
+
+```go
+log.Printf("%d page(s)", res.PageCount)
+if res.LabelsBilled != nil {
+	log.Printf("%d label(s) billed", *res.LabelsBilled)
+}
+if res.RateLimit != nil {
+	log.Printf("%d of %d requests left", res.RateLimit.Remaining, res.RateLimit.Limit)
+}
+```
+
+## Handle errors
+
+An error status returns an `*caretly.APIError` with `StatusCode`, `Message` (the server's plain-text message) and `RetryAfter` (zero when absent). It matches a sentinel per status:
+
+| Status | Sentinel |
+| --- | --- |
+| `400` | `caretly.ErrBadRequest` |
+| `401` | `caretly.ErrUnauthorized` |
+| `402` | `caretly.ErrPaymentRequired` |
+| `413` | `caretly.ErrPayloadTooLarge` |
+| `415` | `caretly.ErrUnsupportedEncoding` |
+| `429` | `caretly.ErrRateLimited` |
+| `503` | `caretly.ErrOverloaded` |
+| Any | `caretly.ErrAPI` |
+
+A transport failure returns a `*caretly.TransportError`. It matches `caretly.ErrTimeout` when an attempt ran over the client timeout, and `caretly.ErrConnection` otherwise.
+
+```go
+res, err := client.Render(ctx, zpl, nil)
+switch {
+case errors.Is(err, caretly.ErrBadRequest):
+	var apiErr *caretly.APIError
+	errors.As(err, &apiErr)
+	log.Printf("invalid ZPL: %s", apiErr.Message)
+case errors.Is(err, caretly.ErrUnauthorized):
+	log.Print("check your API key")
+case errors.Is(err, caretly.ErrTimeout):
+	log.Print("timed out; retry with the same IdempotencyKey")
+case err != nil:
+	log.Print(err)
+}
+```
+
+## Retries and idempotency
+
+The client retries `429`, `503` and connection errors up to `WithMaxRetries` times, 2 by default. It waits `Retry-After` when the server sends it. Otherwise it backs off 0.5 s, 1 s, 2 s, up to 8 s. Timeouts and other statuses aren't retried.
+
+When retries are on and you set no `IdempotencyKey`, the client generates a UUID once per call and sends it on every attempt, so a retried request is never billed twice.
+
+Set your own key, such as an order number, to make retries across calls or processes safe too:
+
+```go
+res, err := client.Render(ctx, zpl, &caretly.RenderOptions{IdempotencyKey: "order-10042"})
+```
+
+## Configuration
+
+Configure the client with options:
+
+```go
+client := caretly.NewClient(
+	caretly.WithAPIKey("zpl_live_..."),             // default: CARETLY_API_KEY
+	caretly.WithBaseURL("http://localhost:3000"),   // default: https://caretly.dev
+	caretly.WithTimeout(10*time.Second),            // per attempt, default 30 s, 0 disables
+	caretly.WithMaxRetries(3),                      // default 2, 0 turns retries off
+	caretly.WithHTTPClient(&http.Client{Transport: transport}),
+)
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `WithAPIKey(key)` | `$CARETLY_API_KEY` | Sent as `Authorization: Bearer <key>`. An empty key sends none. |
+| `WithBaseURL(url)` | `https://caretly.dev` | Point at a self-hosted server. |
+| `WithHTTPClient(hc)` | new `http.Client` | Your own client, for a custom transport or proxy. `WithTimeout` still applies on top. |
+| `WithTimeout(d)` | 30 s | Limit per HTTP attempt. `0` disables it. |
+| `WithMaxRetries(n)` | 2 | Retries after `429`, `503` or a connection error. |
+
+## Health check
+
+```go
+up, err := client.Health(ctx) // true when GET /health answers "ok"
+```
